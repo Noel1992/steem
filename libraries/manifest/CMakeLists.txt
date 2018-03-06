@@ -45,7 +45,7 @@ add_custom_command(
 # Then we use add_custom_command() to execute at build time.
 
 execute_process(
-   COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}
+   COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}:${PYTHONPATH}
    python3 -m steem_manifest.build
    -j ${CMAKE_CURRENT_BINARY_DIR}/template_context
    -t ${CMAKE_CURRENT_SOURCE_DIR}/templates

@@ -100,3 +100,7 @@ install( TARGETS
    LIBRARY DESTINATION lib
    ARCHIVE DESTINATION lib
 )
+
+add_executable( demo demo.cpp )
+target_link_libraries( demo
+                       PRIVATE steem_utilities fc ${CMAKE_DL_LIBS} ${PLATFORM_SPECIFIC_LIBS} )
