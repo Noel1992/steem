@@ -103,4 +103,4 @@ install( TARGETS
 
 add_executable( demo demo.cpp )
 target_link_libraries( demo
-                       PRIVATE steem_utilities fc ${CMAKE_DL_LIBS} ${PLATFORM_SPECIFIC_LIBS} )
+                       PRIVATE steem_utilities steem_protocol fc ${CMAKE_DL_LIBS} ${PLATFORM_SPECIFIC_LIBS} )
