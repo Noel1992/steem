@@ -3,6 +3,8 @@
 
 .vscode
 *.cmake
+cmake-build-debug/
+.idea/
 CMakeCache.txt
 CMakeFiles
 Makefile
