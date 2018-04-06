@@ -40,8 +40,8 @@
 #define STEEMIT_OWNER_AUTH_HISTORY_TRACKING_START_BLOCK_NUM 1
 #else // IS LIVE STEEM NETWORK
 
-#define STEEMIT_INIT_PUBLIC_KEY_STR             "STM8GC13uCZbP44HzMLV6zPZGwVQ8Nt4Kji8PapsPiNq1BK153XTX"
-#define STEEMIT_CHAIN_ID                        (steemit::protocol::chain_id_type())
+#define STEEMIT_INIT_PUBLIC_KEY_STR             "STM6kbKsZj5kY5QrG8huATPtwfVmZmKzFDfUXz1eEbKYF58LorAxF"
+#define STEEMIT_CHAIN_ID (fc::sha256::hash("wbchain"))
 #define VESTS_SYMBOL  (uint64_t(6) | (uint64_t('V') << 8) | (uint64_t('E') << 16) | (uint64_t('S') << 24) | (uint64_t('T') << 32) | (uint64_t('S') << 40)) ///< VESTS with 6 digits of precision
 #define STEEM_SYMBOL  (uint64_t(3) | (uint64_t('S') << 8) | (uint64_t('T') << 16) | (uint64_t('E') << 24) | (uint64_t('E') << 32) | (uint64_t('M') << 40)) ///< STEEM with 3 digits of precision
 #define SBD_SYMBOL    (uint64_t(3) | (uint64_t('S') << 8) | (uint64_t('B') << 16) | (uint64_t('D') << 24) ) ///< STEEM Backed Dollars with 3 digits of precision
@@ -51,22 +51,22 @@
 
 #define STEEMIT_GENESIS_TIME                    (fc::time_point_sec(1458835200))
 #define STEEMIT_MINING_TIME                     (fc::time_point_sec(1458838800))
-#define STEEMIT_CASHOUT_WINDOW_SECONDS_PRE_HF12 (60*60*24)    /// 1 day
-#define STEEMIT_CASHOUT_WINDOW_SECONDS_PRE_HF17 (60*60*12)    /// 12 hours
-#define STEEMIT_CASHOUT_WINDOW_SECONDS          (60*60*24*7)  /// 7 days
-#define STEEMIT_SECOND_CASHOUT_WINDOW           (60*60*24*30) /// 30 days
-#define STEEMIT_MAX_CASHOUT_WINDOW_SECONDS      (60*60*24*14) /// 2 weeks
+#define STEEMIT_CASHOUT_WINDOW_SECONDS_PRE_HF12 (60*60)    /// 1 hour
+#define STEEMIT_CASHOUT_WINDOW_SECONDS_PRE_HF17 (60*60)    /// 1 hour
+#define STEEMIT_CASHOUT_WINDOW_SECONDS          (60*60*3)  /// 3 hours
+#define STEEMIT_SECOND_CASHOUT_WINDOW           (60*60*6) ///  6 hours
+#define STEEMIT_MAX_CASHOUT_WINDOW_SECONDS      (60*60*12) /// 12 hours
 #define STEEMIT_VOTE_CHANGE_LOCKOUT_PERIOD      (60*60*2)     /// 2 hours
 #define STEEMIT_UPVOTE_LOCKOUT_HF7              (fc::minutes(1))
-#define STEEMIT_UPVOTE_LOCKOUT_HF17             (fc::hours(12))
+#define STEEMIT_UPVOTE_LOCKOUT_HF17             (fc::minutes(5))
 
-#define STEEMIT_ORIGINAL_MIN_ACCOUNT_CREATION_FEE  100000
-#define STEEMIT_MIN_ACCOUNT_CREATION_FEE           1
+#define STEEMIT_ORIGINAL_MIN_ACCOUNT_CREATION_FEE  0
+#define STEEMIT_MIN_ACCOUNT_CREATION_FEE           0
 
-#define STEEMIT_OWNER_AUTH_RECOVERY_PERIOD                  fc::days(30)
-#define STEEMIT_ACCOUNT_RECOVERY_REQUEST_EXPIRATION_PERIOD  fc::days(1)
-#define STEEMIT_OWNER_UPDATE_LIMIT                          fc::minutes(60)
-#define STEEMIT_OWNER_AUTH_HISTORY_TRACKING_START_BLOCK_NUM 3186477
+#define STEEMIT_OWNER_AUTH_RECOVERY_PERIOD                  fc::seconds(60)
+#define STEEMIT_ACCOUNT_RECOVERY_REQUEST_EXPIRATION_PERIOD  fc::seconds(120)
+#define STEEMIT_OWNER_UPDATE_LIMIT                          fc::seconds(0)
+#define STEEMIT_OWNER_AUTH_HISTORY_TRACKING_START_BLOCK_NUM 1
 
 #endif
 
@@ -269,3 +269,4 @@
 /// Represents the canonical root post parent account
 #define STEEMIT_ROOT_POST_PARENT                (account_name_type())
 ///@}
+
