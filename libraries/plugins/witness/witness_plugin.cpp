@@ -218,26 +218,26 @@ namespace detail {
 
    void witness_plugin_impl::pre_transaction( const steem::protocol::signed_transaction& trx )
    {
-      flat_set< account_name_type > required; vector<authority> other;
-      trx.get_required_authorities( required, required, required, other );
+      // flat_set< account_name_type > required; vector<authority> other;
+      // trx.get_required_authorities( required, required, required, other );
 
-      auto trx_size = fc::raw::pack_size(trx);
+      // auto trx_size = fc::raw::pack_size(trx);
 
-      for( const auto& auth : required )
-      {
-         const auto& acnt = _db.get_account( auth );
+      // for( const auto& auth : required )
+      // {
+      //    const auto& acnt = _db.get_account( auth );
 
-         update_account_bandwidth( acnt, trx_size, bandwidth_type::forum );
+      //    update_account_bandwidth( acnt, trx_size, bandwidth_type::forum );
 
-         for( const auto& op : trx.operations )
-         {
-            if( is_market_operation( op ) )
-            {
-               update_account_bandwidth( acnt, trx_size * 10, bandwidth_type::market );
-               break;
-            }
-         }
-      }
+      //    for( const auto& op : trx.operations )
+      //    {
+      //       if( is_market_operation( op ) )
+      //       {
+      //          update_account_bandwidth( acnt, trx_size * 10, bandwidth_type::market );
+      //          break;
+      //       }
+      //    }
+      // }
    }
 
    void witness_plugin_impl::pre_operation( const chain::operation_notification& note )
