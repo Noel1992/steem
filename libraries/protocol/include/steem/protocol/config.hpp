@@ -40,9 +40,11 @@
 
 #define STEEM_BLOCKCHAIN_VERSION              ( version(0, 19, 4) )
 
-#define STEEM_INIT_PUBLIC_KEY_STR             "STM82rFF63urm4YfnPUHD2VDVK8uN6VwFtwoPsf4Hom1WVGX5Jwtc"
+#define STEEM_INIT_PUBLIC_KEY_STR             "STM6kbKsZj5kY5QrG8huATPtwfVmZmKzFDfUXz1eEbKYF58LorAxF"
 #define STEEM_CHAIN_ID_NAME "wbchain"
-#define STEEM_CHAIN_ID (fc::sha256::hash(STEEM_CHAIN_ID_NAME))
+#define STEEM_CHAIN_ID_STR "2ac122bd70a2f74d6f761c331f4c4da1028b783cc185d23bf5449ac5af49e198"
+//#define STEEM_CHAIN_ID (fc::sha256::hash(STEEM_CHAIN_ID_NAME))
+#define STEEM_CHAIN_ID (fc::sha256(STEEM_CHAIN_ID_STR))
 #define STEEM_ADDRESS_PREFIX                  "STM"
 
 #define STEEM_GENESIS_TIME                    (fc::time_point_sec(1451606400))
@@ -132,7 +134,7 @@
 #define STEEM_MIN_VOTE_INTERVAL_SEC           3
 #define STEEM_VOTE_DUST_THRESHOLD             (50000000)
 
-#define STEEM_MIN_ROOT_COMMENT_INTERVAL       (fc::seconds(60*5)) // 5 minutes
+#define STEEM_MIN_ROOT_COMMENT_INTERVAL       (fc::seconds(1*1)) // 5 minutes
 #define STEEM_MIN_REPLY_INTERVAL              (fc::seconds(20)) // 20 seconds
 #define STEEM_POST_AVERAGE_WINDOW             (60*60*24u) // 1 day
 #define STEEM_POST_WEIGHT_CONSTANT            (uint64_t(4*STEEM_100_PERCENT) * (4*STEEM_100_PERCENT))// (4*STEEM_100_PERCENT) -> 2 posts per 1 days, average 1 every 12 hours

@@ -37,6 +37,10 @@
 #include <fstream>
 #include <functional>
 
+#include<iostream>
+using std::cout;
+using std::endl;
+
 namespace steem { namespace chain {
 
 struct object_schema_repr
@@ -2992,6 +2996,10 @@ void database::_apply_transaction(const signed_transaction& trx)
       }
 
       fc::time_point_sec now = head_block_time();
+
+	  cout << "head block time:" << now.sec_since_epoch() << " " << now.to_iso_string() << endl;
+	  cout << "expire time:" << trx.expiration.sec_since_epoch() << " " << trx.expiration.to_iso_string() << endl;
+
 
       STEEM_ASSERT( trx.expiration <= now + fc::seconds(STEEM_MAX_TIME_UNTIL_EXPIRATION), transaction_expiration_exception,
                   "", ("trx.expiration",trx.expiration)("now",now)("max_til_exp",STEEM_MAX_TIME_UNTIL_EXPIRATION));

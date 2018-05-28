@@ -1,12 +1,18 @@
-
 #include <steem/protocol/transaction.hpp>
 #include <steem/protocol/transaction_util.hpp>
 
+#include <fc/macros.hpp>
+
 #include <fc/io/raw.hpp>
+#include <fc/io/json.hpp>
 #include <fc/bitutil.hpp>
 #include <fc/smart_ref_impl.hpp>
 
 #include <algorithm>
+
+#include <iostream>
+using std::cout;
+using std::endl;
 
 namespace steem { namespace protocol {
 
@@ -26,9 +32,11 @@ digest_type transaction::digest()const
 
 digest_type transaction::sig_digest( const chain_id_type& chain_id )const
 {
+//	cout << "sig_digest begin-----------" << endl;
    digest_type::encoder enc;
    fc::raw::pack( enc, chain_id );
    fc::raw::pack( enc, *this );
+ //  cout << "\nsig_digest end--------------" << endl;
    return enc.result();
 }
 
@@ -86,8 +94,11 @@ flat_set<public_key_type> signed_transaction::get_signature_keys( const chain_id
 { try {
    auto d = sig_digest( chain_id );
    flat_set<public_key_type> result;
+   cout << "chain_id:" << chain_id.str() << endl;
+   cout << "digest:" << d.str() << endl;
    for( const auto&  sig : signatures )
    {
+	cout << "sig:" << fc::json::to_string(sig)  << endl;
       STEEM_ASSERT(
          result.insert( fc::ecc::public_key(sig,d) ).second,
          tx_duplicate_sig,

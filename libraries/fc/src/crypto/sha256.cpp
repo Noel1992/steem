@@ -9,6 +9,11 @@
 #include <fc/exception/exception.hpp>
 #include "_digest_common.hpp"
 
+#include <iostream>
+
+using std::cout;
+using std::endl;
+
 namespace fc {
 
     sha256::sha256() { memset( _hash, 0, sizeof(_hash) ); }
@@ -54,6 +59,11 @@ namespace fc {
     }
 
     void sha256::encoder::write( const char* d, uint32_t dlen ) {
+           //   for(int i = 0; i < (int)dlen; i++){
+           //       auto v = (int)(*(d+i)) & 0xff;
+           //       cout << v << " ";
+           //   }
+              //cout << " " << dlen << endl;
       SHA256_Update( &my->ctx, d, dlen); 
     }
     sha256 sha256::encoder::result() {
