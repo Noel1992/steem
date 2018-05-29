@@ -553,19 +553,17 @@ bool database::push_block(const signed_block& new_block, uint32_t skip)
    bool result;
    detail::with_skip_flags( *this, skip, [&]()
    {
-	   with_write_lock( [&]()
-	  {
-		   /* 要避免并发影响 */
-		   detail::without_pending_transactions( *this, std::move(_pending_tx), [&]()
-			 {
-				try
-				{
-				   result = _push_block(new_block);
-				}
-				FC_CAPTURE_AND_RETHROW( (new_block) )
 
-			 });
-	  });
+	   detail::without_pending_transactions( *this, std::move(_pending_tx), [&]()
+		 {
+			try
+			{
+			   result = _push_block(new_block);
+			}
+			FC_CAPTURE_AND_RETHROW( (new_block) )
+
+		 });
+
 	  check_free_memory( false, new_block.block_num() );
 
    });
@@ -882,8 +880,10 @@ signed_block database::_generate_block(
       FC_ASSERT( fc::raw::pack_size(pending_block) <= STEEM_MAX_BLOCK_SIZE );
    }
 
-   push_block( pending_block, skip );
-
+   with_write_lock( [&]()
+   {
+	   push_block( pending_block, skip );
+   });
    return pending_block;
 }
 
