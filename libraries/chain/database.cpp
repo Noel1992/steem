@@ -553,16 +553,21 @@ bool database::push_block(const signed_block& new_block, uint32_t skip)
    bool result;
    detail::with_skip_flags( *this, skip, [&]()
    {
-      detail::without_pending_transactions( *this, std::move(_pending_tx), [&]()
-      {
-         try
-         {
-            result = _push_block(new_block);
-         }
-         FC_CAPTURE_AND_RETHROW( (new_block) )
+	   with_write_lock( [&]()
+	  {
+		   /* 要避免并发影响 */
+		   detail::without_pending_transactions( *this, std::move(_pending_tx), [&]()
+			 {
+				try
+				{
+				   result = _push_block(new_block);
+				}
+				FC_CAPTURE_AND_RETHROW( (new_block) )
 
-         check_free_memory( false, new_block.block_num() );
-      });
+			 });
+	  });
+	  check_free_memory( false, new_block.block_num() );
+
    });
 
    //fc::time_point end_time = fc::time_point::now();
@@ -2655,6 +2660,8 @@ void database::check_free_memory( bool force_print, uint32_t current_block_num )
          _last_free_gb_printed = free_gb;
       }
 
+      wlog( "Free memory is now ${n}G!" , ("n", free_gb) );
+
       if( BOOST_UNLIKELY( free_gb == 0 ) )
       {
          uint32_t free_mb = uint32_t( free_mem / (1024*1024) );
@@ -3066,6 +3073,9 @@ const witness_object& database::validate_block_header( uint32_t skip, const sign
 void database::create_block_summary(const signed_block& next_block)
 { try {
    block_summary_id_type sid( next_block.block_num() & 0xffff );
+   wlog("+++ update block_summary_object, old block_id: ${oid}, new block_id: ${nid}",
+   		   ("oid", get<block_summary_object>(sid).block_id._hash[1]) ("nid", next_block.id()._hash[1]));
+
    modify( get< block_summary_object >( sid ), [&](block_summary_object& p) {
          p.block_id = next_block.id();
    });
