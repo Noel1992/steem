@@ -51,6 +51,9 @@ LIST(APPEND BOOST_COMPONENTS thread
                              coroutine)
 SET( Boost_USE_STATIC_LIBS ON CACHE STRING "ON or OFF" )
 
+SET( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fno-omit-frame-pointer" )
+SET( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -fno-omit-frame-pointer" )
+
 OPTION( BUILD_STEEM_TESTNET "Build source for test network (ON OR OFF)" OFF )
 MESSAGE( STATUS "BUILD_STEEM_TESTNET: ${BUILD_STEEM_TESTNET}" )
 if( BUILD_STEEM_TESTNET  )
