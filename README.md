@@ -111,8 +111,6 @@ For a full web node, you need at least 110GB of disk space available. Steemd use
 
 On Linux use the following Virtual Memory configuration for the initial sync and subsequent replays. It is not needed for normal operation.
 
-
-
 ```
 echo    75 | sudo tee /proc/sys/vm/dirty_background_ratio
 echo  1000 | sudo tee /proc/sys/vm/dirty_expire_centisecs
