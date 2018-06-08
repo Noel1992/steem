@@ -1019,12 +1019,47 @@ namespace chainbase {
 //                  std::cerr << "Lock timeout, moving to lock " << _rw_manager.current_lock_num() << std::endl;
 //                  lock = write_lock( _rw_manager.current_lock(), boost::defer_lock_t() );
             	   	  	std::cerr << "Lock timeout, moving to lock " << _rw_manager.current_lock_num() << std::endl;
-            	   	  	std::cout << "Lock timeout, moving to lock " << _rw_manager.current_lock_num() << std::endl;
                }
             }
 
             return callback();
          }
+
+			template<typename MultiIndexType, typename Lambda>
+			auto with_index_read_lock(Lambda&& callback, uint64_t wait_micro = 1000000) -> decltype( (*(Lambda*)nullptr) ) {
+				const uint16_t type_id = generic_index<MultiIndexType>::value_type::type_id;
+				read_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+
+				if (!wait_micro) {
+					lock.lock();
+				} else {
+					if (!lock.timed_lock(boost::posix_time::microsec_clock::universal_time() + boost::posix_time::microseconds(wait_micro)))
+						BOOST_THROW_EXCEPTION(lock_exception());
+				}
+
+				return callback();
+			}
+
+			template<typename MultiIndexType, typename Lambda>
+			auto with_index_write_lock(Lambda&& callback, uint64_t wait_micro = 1000000) -> decltype( (*(Lambda*)nullptr) )
+			{
+				const uint16_t type_id = generic_index<MultiIndexType>::value_type::type_id;
+				write_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+
+				if (!wait_micro)
+				{
+					lock.lock();
+				}
+				else
+				{
+					while( !lock.timed_lock( boost::posix_time::microsec_clock::universal_time( + boost::posix_time::microseconds( wait_micr )) ) )
+					{
+						std::cerr << "Index lock timeout" << type_id << std::endl;
+					}
+				}
+
+				return callback();
+			}
 
          template< typename IndexExtensionType, typename Lambda >
          void for_each_index_extension( Lambda&& callback )const
@@ -1063,12 +1098,17 @@ namespace chainbase {
              idx_ptr = _segment->find_or_construct< index_type >( type_name.c_str() )( index_alloc( _segment->get_segment_manager() ) );
              idx_ptr->validate();
 
-             if( type_id >= _index_map.size() )
+             assert(_index_map.size() == _index_mutex_map.size());
+
+             if( type_id >= _index_map.size() ) {
                 _index_map.resize( type_id + 1 );
+                _index_mutex_map.resize(type_id + 1);
+             }
 
              auto new_index = new index<index_type>( *idx_ptr );
              _index_map[ type_id ].reset( new_index );
              _index_list.push_back( new_index );
+             _index_mutex_map[ type_id ].reset(new read_write_mutex());
          }
 
          read_write_mutex_manager                                    _rw_manager;
@@ -1087,6 +1127,9 @@ namespace chainbase {
          vector<unique_ptr<abstract_index>>                          _index_map;
 
          vector<unique_ptr<abstract_index_type>>                     _index_types;
+
+         /* This a full map of all possible index's mutex */
+         vector<unique_ptr<read_write_mutex>>						_index_mutex_map;
 
          bfs::path                                                   _data_dir;
 

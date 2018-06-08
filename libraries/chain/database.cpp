@@ -724,13 +724,20 @@ void database::_push_transaction( const signed_transaction& trx )
    // _apply_transaction fails.  If we make it to merge(), we
    // apply the changes.
 
-   auto temp_session = start_undo_session();
+   // 只对非幂等trx采用undo session更新
+   bool idempotency = is_idempotency(trx);
+   database::session temp_session = idempotency ? nullptr : start_undo_session();
+
    _apply_transaction( trx );
    _pending_tx.push_back( trx );
 
    notify_changed_objects();
+
    // The transaction applied successfully. Merge its changes into the pending block session.
-   temp_session.squash();
+   if( idempotency )
+   {
+   		temp_session.squash();
+   }
 
    // notify anyone listening to pending transactions
    notify_on_pending_transaction( trx );
@@ -3045,6 +3052,38 @@ void database::apply_operation(const operation& op)
    notify_pre_apply_operation( note );
    _my->_evaluator_registry.get_evaluator( op ).apply( op );
    notify_post_apply_operation( note );
+}
+
+/**
+ * 目前对三种op进行降级幂等处理：创建account、发贴、删贴；对应的op为：account_create_operation,account_update_operation，
+ * 以及comment_operation，delete_comment_operation,
+ */
+bool database::is_idempotency( const operation& op )
+{
+	if (op.which() == operation::tag< account_create_operation >::value ||
+			op.which() == operation::tag< account_update_operation >::value ||
+			op.which() == operation::tag< comment_operation >::value ||
+			op.which() == operation::tag< delete_comment_operation >::value)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * 只有所有operation都是幂等，这个trx才是幂等
+ */
+bool database::is_idempotency( const signed_transaction& trx )
+{
+	for( const auto& op : trx.operations )
+	{
+		if (!is_idempotency(op)) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 const witness_object& database::validate_block_header( uint32_t skip, const signed_block& next_block )const

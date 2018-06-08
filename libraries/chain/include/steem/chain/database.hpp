@@ -471,6 +471,9 @@ namespace steem { namespace chain {
          void _apply_transaction( const signed_transaction& trx );
          void apply_operation( const operation& op );
 
+         /* 针对当前需求的account、post等常规交易，看作是幂等（idempotency），可以降级成不支持undo处理 */
+         bool is_idempotency( const operation& op );
+         bool is_idempotency( const signed_transaction& trx );
 
          ///Steps involved in applying a new block
          ///@{
