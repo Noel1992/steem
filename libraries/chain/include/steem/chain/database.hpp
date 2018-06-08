@@ -10,6 +10,8 @@
 #include <steem/chain/operation_notification.hpp>
 #include <steem/chain/util/signal.hpp>
 
+#include <steem/chain/dao.hpp>
+
 #include <steem/protocol/protocol.hpp>
 #include <steem/protocol/hardfork.hpp>
 
@@ -389,6 +391,7 @@ namespace steem { namespace chain {
 
          /// Reset the object graph in-memory
          void initialize_indexes();
+		 void initialize_daos();
          void init_schema();
          void init_genesis(uint64_t initial_supply = STEEM_INIT_SUPPLY );
 
@@ -539,6 +542,9 @@ namespace steem { namespace chain {
 
          fc::signal<on_reindex_start_t>   _on_reindex_start;
          fc::signal<on_reindex_done_t>    _on_reindex_done;
+
+		 // all dao initialize in initialize_dao
+		 std::unique_ptr< account_dao > _account_dao;
    };
 
 } }

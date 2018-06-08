@@ -17,6 +17,7 @@
 #include <steem/chain/shared_db_merkle.hpp>
 #include <steem/chain/operation_notification.hpp>
 #include <steem/chain/witness_schedule.hpp>
+#include <steem/chain/dao.hpp>
 
 #include <steem/chain/util/asset.hpp>
 #include <steem/chain/util/reward.hpp>
@@ -111,6 +112,7 @@ void database::open( const open_args& args )
       chainbase::database::open( args.shared_mem_dir, args.chainbase_flags, args.shared_file_size );
 
       initialize_indexes();
+	  initialize_daos();
       initialize_evaluators();
 
       if( !find< dynamic_global_property_object >() )
@@ -409,12 +411,17 @@ const witness_object* database::find_witness( const account_name_type& name ) co
 
 const account_object& database::get_account( const account_name_type& name )const
 { try {
+      CHAINBASE_REQUIRE_READ_LOCK("get", account_object); 
+      return _account_dao->get_by_name(name);
+     //return get< account_object, by_name >( name );
    return get< account_object, by_name >( name );
 } FC_CAPTURE_AND_RETHROW( (name) ) }
 
 const account_object* database::find_account( const account_name_type& name )const
 {
-   return find< account_object, by_name >( name );
+      CHAINBASE_REQUIRE_READ_LOCK("find", account_object);
+      return _account_dao->find_by_name(name);
+     //return find< account_object, by_name >( name );
 }
 
 const comment_object& database::get_comment( const account_name_type& author, const shared_string& permlink )const
@@ -2342,6 +2349,13 @@ void database::initialize_indexes()
 
    _plugin_index_signal();
 }
+
+  // called after initialize_indexes
+  void database::initialize_daos()
+  {
+      const auto& idx = get_index< account_index >();
+      _account_dao = std::unique_ptr<account_dao>(new account_dao(idx));
+  }
 
 const std::string& database::get_json_schema()const
 {

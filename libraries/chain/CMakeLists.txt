@@ -19,6 +19,8 @@ add_library( steem_chain
              util/reward.cpp
              util/impacted.cpp
 
+			 dao.cpp
+
              ${HEADERS}
            )
 

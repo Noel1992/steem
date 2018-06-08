@@ -19,6 +19,7 @@
 #include <steem/protocol/exceptions.hpp>
 
 #include <steem/chain/account_object.hpp>
+#include <steem/chain/dao.hpp>
 
 #include <fc/exception/exception.hpp>
 #include <fc/git_revision.hpp>
@@ -239,15 +240,21 @@ int main(int argc, char **argv) {
 	try {
 		auto chain = appbase::app().find_plugin<steem::plugins::chain::chain_plugin>();
 		steem::chain::database &db = chain->db();
-		auto chain_id = db.get_chain_id();
-        auto get_active  = [&]( const string& name ) { return authority( db.get< account_authority_object, by_account >( name ).active ); };
-	    auto get_owner   = [&]( const string& name ) { return authority( db.get< account_authority_object, by_account >( name ).owner );  };
-	    auto get_posting = [&]( const string& name ) { return authority( db.get< account_authority_object, by_account >( name ).posting );  };
-	    auto tx = fc::json::from_file("/data0/steem/programs/util/new_account.json").as<signed_transaction>();
-		auto sig_keys = tx.get_signature_keys(chain_id);
-		verify_authority(tx.operations, sig_keys, get_active, get_owner, get_posting, 2);	
+		account_object account = db.get_account("initminer");
+		//const auto& idx = db.get_index<account_index>();
+		//account_dao dao(idx);
+		//auto account = dao.find_by_name("initminer");
+		cout << account.post_count << endl;
+
+		//cout << account->post_count << endl;
+		//auto chain_id = db.get_chain_id();
+        //auto get_active  = [&]( const string& name ) { return authority( db.get< account_authority_object, by_account >( name ).active ); };
+	    //auto get_owner   = [&]( const string& name ) { return authority( db.get< account_authority_object, by_account >( name ).owner );  };
+	    //auto get_posting = [&]( const string& name ) { return authority( db.get< account_authority_object, by_account >( name ).posting );  };
+	    //auto tx = fc::json::from_file("/data0/steem/programs/util/new_account.json").as<signed_transaction>();
+		//auto sig_keys = tx.get_signature_keys(chain_id);
+		//verify_authority(tx.operations, sig_keys, get_active, get_owner, get_posting, 2);	
 	} catch(std::exception e) {
 		cout << " exeption: " << e.what() << endl;
 	}
 }
-
