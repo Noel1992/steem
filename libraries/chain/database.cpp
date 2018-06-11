@@ -4024,6 +4024,15 @@ void database::set_hardfork( uint32_t hardfork, bool apply_now )
    }
 }
 
+/**
+ * 根据raw_str计算city hash，然后返回对应的object mutex
+ */
+read_write_mutex database::get_object_mutex(const string& raw_str)
+{
+	uint32_t str_hash = fc::city_hash32(raw_str.c_str(), raw_str.length());
+	return get_object_mutex_by_hash(str_hash);
+}
+
 void database::apply_hardfork( uint32_t hardfork )
 {
    if( _log_hardforks )

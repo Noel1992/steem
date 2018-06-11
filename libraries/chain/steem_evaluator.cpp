@@ -82,6 +82,10 @@ void copy_legacy_chain_properties( chain_properties& dest, const legacy_chain_pr
 
 void witness_update_evaluator::do_apply( const witness_update_operation& o )
 {
+	// 根据owner加写锁
+	read_write_mutex object_mutex = _db.get_object_mutex(o.owner);
+	write_lock lock(object_mutex, bip::defer_lock_type());
+
    _db.get_account( o.owner ); // verify owner exists
 
    if ( _db.has_hardfork( STEEM_HARDFORK_0_14__410 ) )

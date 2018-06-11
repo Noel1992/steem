@@ -40,6 +40,9 @@
    #define CHAINBASE_REQUIRE_WRITE_LOCK(m, t)
 #endif
 
+// from memcached: if count of worker threads is more than 20
+#define OBJECT_LOCKS (1 << 15)
+
 namespace helpers
 {
    struct index_statistic_info
@@ -877,6 +880,10 @@ namespace chainbase {
                BOOST_THROW_EXCEPTION( std::runtime_error( "unable to find index for " + type_name + " in database" ) );
             }
 
+            // 变更index，加写锁
+            	const uint16_t type_id = index_type::value_type::type_id;
+            	write_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+
             _index_map[index_type::value_type::type_id]->add_index_extension( ext );
          }
 
@@ -952,19 +959,36 @@ namespace chainbase {
              return *obj;
          }
 
+         /**
+          * TODO: 对于modify，需要评估改造方案：
+          * 1 先查再改，查、check、改都需要同步，放到外部去 or 尽量在db内部进行？
+          */
          template<typename ObjectType, typename Modifier>
          void modify( const ObjectType& obj, Modifier&& m )
          {
              CHAINBASE_REQUIRE_WRITE_LOCK("modify", ObjectType);
              typedef typename get_index_type<ObjectType>::type index_type;
+
+             // index 插入，加写锁
+             const uint16_t type_id = generic_index<index_type>::value_type::type_id;
+			    write_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+
              get_mutable_index<index_type>().modify( obj, m );
          }
 
+         /**
+          * TODO: 对于modify，需要评估改造方案：
+          * 1 先查再改，查、check、改都需要同步，放到外部去 or 尽量在db内部进行？
+          */
          template<typename ObjectType>
          void remove( const ObjectType& obj )
          {
              CHAINBASE_REQUIRE_WRITE_LOCK("remove", ObjectType);
              typedef typename get_index_type<ObjectType>::type index_type;
+
+             const uint16_t type_id = generic_index<index_type>::value_type::type_id;
+             write_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+
              return get_mutable_index<index_type>().remove( obj );
          }
 
@@ -973,6 +997,11 @@ namespace chainbase {
          {
              CHAINBASE_REQUIRE_WRITE_LOCK("create", ObjectType);
              typedef typename get_index_type<ObjectType>::type index_type;
+
+             // index 插入，加写锁
+             const uint16_t type_id = generic_index<index_type>::value_type::type_id;
+             write_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+
              return get_mutable_index<index_type>().emplace( std::forward<Constructor>(con) );
          }
 
@@ -1033,8 +1062,9 @@ namespace chainbase {
 				if (!wait_micro) {
 					lock.lock();
 				} else {
-					if (!lock.timed_lock(boost::posix_time::microsec_clock::universal_time() + boost::posix_time::microseconds(wait_micro)))
-						BOOST_THROW_EXCEPTION(lock_exception());
+					while (!lock.timed_lock( boost::posix_time::microsec_clock::universal_time() + boost::posix_time::microseconds(wait_micro)) ) {
+						std::cerr << "Index lock timeout" << type_id << std::endl;
+					}
 				}
 
 				return callback();
@@ -1052,7 +1082,7 @@ namespace chainbase {
 				}
 				else
 				{
-					while( !lock.timed_lock( boost::posix_time::microsec_clock::universal_time( + boost::posix_time::microseconds( wait_micr )) ) )
+					while( !lock.timed_lock( boost::posix_time::microsec_clock::universal_time() + boost::posix_time::microseconds( wait_micro )) )
 					{
 						std::cerr << "Index lock timeout" << type_id << std::endl;
 					}
@@ -1080,6 +1110,8 @@ namespace chainbase {
          
          const abstract_index_cntr_t& get_abstract_index_cntr() const
             { return _index_list; }
+
+         chainbase::read_write_mutex get_object_mutex_by_hash(const uint32_t hash);
 
       private:
          template<typename MultiIndexType>
@@ -1128,8 +1160,11 @@ namespace chainbase {
 
          vector<unique_ptr<abstract_index_type>>                     _index_types;
 
-         /* This a full map of all possible index's mutex */
-         vector<unique_ptr<read_write_mutex>>						_index_mutex_map;
+         /* A full map of all possible index's mutex */
+         vector<unique_ptr<read_write_mutex>>									_index_mutex_map;
+
+         /* A full map of all possible object's mutex */
+         vector<unique_ptr<read_write_mutex>>									_object_mutex_map;
 
          bfs::path                                                   _data_dir;
 
