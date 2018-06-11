@@ -799,6 +799,7 @@ signed_block database::_generate_block(
       // the value of the "when" variable is known, which means we need to
       // re-apply pending transactions in this method.
       //
+	  //幂等下面都不需要
       _pending_tx_session.reset();
       _pending_tx_session = start_undo_session();
 
@@ -824,7 +825,9 @@ signed_block database::_generate_block(
          try
          {
             auto temp_session = start_undo_session();
+            if(!has_transction){
             _apply_transaction( tx );
+            }
             temp_session.squash();
 
             total_block_size += fc::raw::pack_size( tx );
