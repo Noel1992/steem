@@ -28,6 +28,10 @@ namespace steem { namespace chain {
    using steem::protocol::asset_symbol_type;
    using steem::protocol::price;
 
+   typedef boost::interprocess::interprocess_sharable_mutex read_write_mutex;
+   typedef boost::interprocess::sharable_lock< read_write_mutex > read_lock;
+	typedef boost::unique_lock< read_write_mutex > write_lock;
+
    class database_impl;
    class custom_operation_interpreter;
 
@@ -494,6 +498,8 @@ namespace steem { namespace chain {
          void init_hardforks();
          void process_hardforks();
          void apply_hardfork( uint32_t hardfork );
+
+         read_write_mutex get_object_mutex(const string& raw_str);
 
          ///@}
 #ifdef STEEM_ENABLE_SMT
