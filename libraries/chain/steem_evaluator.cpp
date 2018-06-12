@@ -83,8 +83,7 @@ void copy_legacy_chain_properties( chain_properties& dest, const legacy_chain_pr
 void witness_update_evaluator::do_apply( const witness_update_operation& o )
 {
 	// 根据owner加写锁
-	read_write_mutex object_mutex = _db.get_object_mutex(o.owner);
-	write_lock lock(object_mutex, bip::defer_lock_type());
+	write_lock lock(_db.get_object_mutex(o.owner));
 
    _db.get_account( o.owner ); // verify owner exists
 
@@ -254,37 +253,42 @@ void verify_authority_accounts_exist(
 
 void account_create_evaluator::do_apply( const account_create_operation& o )
 {
-   const auto& creator = _db.get_account( o.creator );
 
-   const auto& props = _db.get_dynamic_global_properties();
+	{
+		// write_lock 和待保护的数据放入相同块中，当然也可以用new+delete，但为避免泄漏及死锁，放入块是最安全的 fishermen
+		write_lock creator_lock(_db.get_object_mutex(o.creator));
+		const auto& creator = _db.get_account( o.creator );
 
-   FC_ASSERT( creator.balance >= o.fee, "Insufficient balance to create account.", ( "creator.balance", creator.balance )( "required", o.fee ) );
+		const auto& props = _db.get_dynamic_global_properties();
 
-   if( _db.has_hardfork( STEEM_HARDFORK_0_19__987) )
-   {
-      const witness_schedule_object& wso = _db.get_witness_schedule_object();
-      FC_ASSERT( o.fee >= asset( wso.median_props.account_creation_fee.amount * STEEM_CREATE_ACCOUNT_WITH_STEEM_MODIFIER, STEEM_SYMBOL ), "Insufficient Fee: ${f} required, ${p} provided.",
-                 ("f", wso.median_props.account_creation_fee * asset( STEEM_CREATE_ACCOUNT_WITH_STEEM_MODIFIER, STEEM_SYMBOL ) )
-                 ("p", o.fee) );
-   }
-   else if( _db.has_hardfork( STEEM_HARDFORK_0_1 ) )
-   {
-      const witness_schedule_object& wso = _db.get_witness_schedule_object();
-      FC_ASSERT( o.fee >= wso.median_props.account_creation_fee, "Insufficient Fee: ${f} required, ${p} provided.",
-                 ("f", wso.median_props.account_creation_fee)
-                 ("p", o.fee) );
-   }
+		FC_ASSERT( creator.balance >= o.fee, "Insufficient balance to create account.", ( "creator.balance", creator.balance )( "required", o.fee ) );
 
-   if( _db.has_hardfork( STEEM_HARDFORK_0_15__465 ) )
-   {
-      verify_authority_accounts_exist( _db, o.owner, o.new_account_name, authority::owner );
-      verify_authority_accounts_exist( _db, o.active, o.new_account_name, authority::active );
-      verify_authority_accounts_exist( _db, o.posting, o.new_account_name, authority::posting );
-   }
+		if( _db.has_hardfork( STEEM_HARDFORK_0_19__987) )
+		{
+			const witness_schedule_object& wso = _db.get_witness_schedule_object();
+			FC_ASSERT( o.fee >= asset( wso.median_props.account_creation_fee.amount * STEEM_CREATE_ACCOUNT_WITH_STEEM_MODIFIER, STEEM_SYMBOL ), "Insufficient Fee: ${f} required, ${p} provided.",
+						  ("f", wso.median_props.account_creation_fee * asset( STEEM_CREATE_ACCOUNT_WITH_STEEM_MODIFIER, STEEM_SYMBOL ) )
+						  ("p", o.fee) );
+		}
+		else if( _db.has_hardfork( STEEM_HARDFORK_0_1 ) )
+		{
+			const witness_schedule_object& wso = _db.get_witness_schedule_object();
+			FC_ASSERT( o.fee >= wso.median_props.account_creation_fee, "Insufficient Fee: ${f} required, ${p} provided.",
+						  ("f", wso.median_props.account_creation_fee)
+						  ("p", o.fee) );
+		}
 
-   _db.modify( creator, [&]( account_object& c ){
-      c.balance -= o.fee;
-   });
+		if( _db.has_hardfork( STEEM_HARDFORK_0_15__465 ) )
+		{
+			verify_authority_accounts_exist( _db, o.owner, o.new_account_name, authority::owner );
+			verify_authority_accounts_exist( _db, o.active, o.new_account_name, authority::active );
+			verify_authority_accounts_exist( _db, o.posting, o.new_account_name, authority::posting );
+		}
+
+		_db.modify( creator, [&]( account_object& c ){
+			c.balance -= o.fee;
+		});
+	}
 
    const auto& new_account = _db.create< account_object >( [&]( account_object& acc )
    {
@@ -321,6 +325,9 @@ void account_create_evaluator::do_apply( const account_create_operation& o )
 void account_create_with_delegation_evaluator::do_apply( const account_create_with_delegation_operation& o )
 {
    FC_ASSERT( !_db.has_hardfork( STEEM_HARDFORK_0_20__1760 ), "Account creation with delegation is deprecated as of Hardfork 20" );
+
+   // write_lock 保护需要modify的creator
+   write_lock creator_lock(_db.get_object_mutex(o.creator));
 
    const auto& creator = _db.get_account( o.creator );
    const auto& props = _db.get_dynamic_global_properties();
@@ -418,6 +425,9 @@ void account_update_evaluator::do_apply( const account_update_operation& o )
 
    if( ( _db.has_hardfork( STEEM_HARDFORK_0_15__465 ) ) && o.posting )
       o.posting->validate();
+
+   // 需要保护account和account_auth，在query之后、modify之前不被并发修改
+   write_lock account_lock(_db.get_object_mutex(o.account));
 
    const auto& account = _db.get_account( o.account );
    const auto& account_auth = _db.get< account_authority_object, by_account >( o.account );

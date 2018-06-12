@@ -473,8 +473,14 @@ const savings_withdraw_object* database::find_savings_withdraw( const account_na
    return find< savings_withdraw_object, by_from_rid >( boost::make_tuple( owner, request_id ) );
 }
 
-const dynamic_global_property_object&database::get_dynamic_global_properties() const
+/**
+ * 对于全局属性类object，读取/更新分别使用读/写锁，避免幻读
+ */
+const dynamic_global_property_object& database::get_dynamic_global_properties() const
 { try {
+	// 全局属性读取时，使用读锁
+	read_lock lock(get_index_mutex(dynamic_global_property_object::type_id));
+
    return get< dynamic_global_property_object >();
 } FC_CAPTURE_AND_RETHROW() }
 
@@ -490,6 +496,9 @@ const feed_history_object& database::get_feed_history()const
 
 const witness_schedule_object& database::get_witness_schedule_object()const
 { try {
+	// 全局属性，加读锁
+	read_lock lock(get_index_mutex(witness_schedule_object::type_id));
+
    return get< witness_schedule_object >();
 } FC_CAPTURE_AND_RETHROW() }
 
@@ -4027,6 +4036,7 @@ void database::set_hardfork( uint32_t hardfork, bool apply_now )
 read_write_mutex database::get_object_mutex(const string& raw_str)
 {
 	uint32_t str_hash = fc::city_hash32(raw_str.c_str(), raw_str.length());
+
 	return get_object_mutex_by_hash(str_hash);
 }
 

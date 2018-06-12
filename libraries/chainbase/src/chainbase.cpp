@@ -77,15 +77,6 @@ namespace chainbase {
       }
    }
 
-   /**
-    * 根据hash获取object mutex
-    */
-   read_write_mutex database::get_object_mutex_by_hash(const uint32_t hash)
-   {
-   		uint32_t pos = hash % _object_mutex_map.size();
-   		return _object_mutex_map[pos].get();
-   }
-
    void database::flush() {
       if( _segment )
          _segment->flush();

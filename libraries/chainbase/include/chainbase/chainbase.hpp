@@ -757,6 +757,8 @@ namespace chainbase {
          }
 #endif
 
+         enum class lock_type {none, read_lock, write_lock};
+
          struct session {
             public:
                session( session&& s )
@@ -854,7 +856,7 @@ namespace chainbase {
          }
 
          template<typename MultiIndexType>
-         const generic_index<MultiIndexType>& get_index()const
+         const generic_index<MultiIndexType>& get_index(lock_type &lock)const
          {
             CHAINBASE_REQUIRE_READ_LOCK("get_index", typename MultiIndexType::value_type);
             typedef generic_index<MultiIndexType> index_type;
@@ -866,11 +868,15 @@ namespace chainbase {
                BOOST_THROW_EXCEPTION( std::runtime_error( "unable to find index for " + type_name + " in database" ) );
             }
 
-            return *index_type_ptr( _index_map[index_type::value_type::type_id]->get() );
+            if (lock_type::none == lock) {
+            		return *index_type_ptr( _index_map[index_type::value_type::type_id]->get() );
+            }
+
+            BOOST_THROW_EXCEPTION(std::logic_error("malformed lock in get_index"));
          }
 
          template<typename MultiIndexType>
-         void add_index_extension( std::shared_ptr< index_extension > ext )
+         void add_index_extension( std::shared_ptr< index_extension > ext, lock_type &lock )
          {
             typedef generic_index<MultiIndexType> index_type;
 
@@ -880,19 +886,35 @@ namespace chainbase {
                BOOST_THROW_EXCEPTION( std::runtime_error( "unable to find index for " + type_name + " in database" ) );
             }
 
-            // 变更index，加写锁
-            	const uint16_t type_id = index_type::value_type::type_id;
-            	write_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+            if (lock_type::write_lock == lock)
+            {
+            		// 变更index，加写锁
+					write_lock lock(get_index_mutex(index_type::value_type::type_id));
 
-            _index_map[index_type::value_type::type_id]->add_index_extension( ext );
+					_index_map[index_type::value_type::type_id]->add_index_extension( ext );
+            }
+            else if (lock_type::none == lock)
+            {
+            		_index_map[index_type::value_type::type_id]->add_index_extension( ext );
+            }
+
+            BOOST_THROW_EXCEPTION(std::logic_error("malformed lock type in add_index_extension"));
          }
 
+         /**
+          * 强制传入lock_type,来强制检查所有调用地！ fishermen
+          */
          template<typename MultiIndexType, typename ByIndex>
-         auto get_index()const -> decltype( ((generic_index<MultiIndexType>*)( nullptr ))->indicies().template get<ByIndex>() )
+         auto get_index(lock_type &lock)const -> decltype( ((generic_index<MultiIndexType>*)( nullptr ))->indicies().template get<ByIndex>() )
          {
             CHAINBASE_REQUIRE_READ_LOCK("get_index", typename MultiIndexType::value_type);
             typedef generic_index<MultiIndexType> index_type;
             typedef index_type*                   index_type_ptr;
+
+            if (lock_type::none != lock)
+            {
+            		BOOST_THROW_EXCEPTION(std::logic_error("only support lock_type::none in get_index!"));
+            }
 
             if( !has_index< MultiIndexType >() )
             {
@@ -903,12 +925,20 @@ namespace chainbase {
             return index_type_ptr( _index_map[index_type::value_type::type_id]->get() )->indicies().template get<ByIndex>();
          }
 
+         /**
+          * 强制传入lock_type,来强制检查所有调用地！ fishermen
+          */
          template<typename MultiIndexType>
-         generic_index<MultiIndexType>& get_mutable_index()
+         generic_index<MultiIndexType>& get_mutable_index(lock_type &lock)
          {
             CHAINBASE_REQUIRE_WRITE_LOCK("get_mutable_index", typename MultiIndexType::value_type);
             typedef generic_index<MultiIndexType> index_type;
             typedef index_type*                   index_type_ptr;
+
+            if (lock_type::none != lock)
+				{
+					BOOST_THROW_EXCEPTION(std::logic_error("only accept lock_type::none in get_mutable_index"));
+				}
 
             if( !has_index< MultiIndexType >() )
             {
@@ -920,43 +950,118 @@ namespace chainbase {
          }
 
          template< typename ObjectType, typename IndexedByType, typename CompatibleKey >
-         const ObjectType* find( CompatibleKey&& key )const
+         const ObjectType* find( CompatibleKey&& key, lock_type &lock )const
          {
              CHAINBASE_REQUIRE_READ_LOCK("find", ObjectType);
              typedef typename get_index_type< ObjectType >::type index_type;
-             const auto& idx = get_index< index_type >().indicies().template get< IndexedByType >();
-             auto itr = idx.find( std::forward< CompatibleKey >( key ) );
-             if( itr == idx.end() ) return nullptr;
-             return &*itr;
+
+             if (lock_type::read_lock == lock)
+             {
+            	 	 // 加读锁，处理通用场景
+            	 	 read_lock lock(get_index_mutex(ObjectType::type_id));
+
+            	 	 const auto& idx = get_index< index_type >(lock_type::none).indicies().template get< IndexedByType >();
+					 auto itr = idx.find( std::forward< CompatibleKey >( key ) );
+					 if( itr == idx.end() ) return nullptr;
+					 return &*itr;
+             }
+             else if (lock_type::none == lock)
+             {
+            	 	 // 不加锁，应对其他场景
+            	 	 const auto& idx = get_index< index_type >(lock_type::none).indicies().template get< IndexedByType >();
+					 auto itr = idx.find( std::forward< CompatibleKey >( key ) );
+					 if( itr == idx.end() ) return nullptr;
+					 return &*itr;
+             }
+
+             BOOST_THROW_EXCEPTION(std::logic_error("malformed lock type in find"));
          }
 
          template< typename ObjectType >
-         const ObjectType* find( oid< ObjectType > key = oid< ObjectType >() ) const
+         const ObjectType* find( oid< ObjectType > key = oid< ObjectType >(), lock_type& lock ) const
          {
              CHAINBASE_REQUIRE_READ_LOCK("find", ObjectType);
              typedef typename get_index_type< ObjectType >::type index_type;
-             const auto& idx = get_index< index_type >().indices();
-             auto itr = idx.find( key );
-             if( itr == idx.end() ) return nullptr;
-             return &*itr;
+
+             if (lock_type::read_lock == lock)
+             {
+            	 	 // write lock, for common sences
+            	 	 read_lock lock(get_index_mutex(ObjectType::type_id));
+
+            	 	 const auto& idx = get_index< index_type >(lock_type::none).indices();
+				    auto itr = idx.find( key );
+				    if( itr == idx.end() ) return nullptr;
+				    return &*itr;
+             }
+             else if (lock_type::none == lock)
+             {
+            	 	 // TODO: 重复代码迁到find_without_lock ?，这样函数会多一倍，其他类似函数都考虑一下 fishermen
+            	 	 const auto& idx = get_index< index_type >(lock_type::none).indices();
+					 auto itr = idx.find( key );
+					 if( itr == idx.end() ) return nullptr;
+					 return &*itr;
+             }
+
+             BOOST_THROW_EXCEPTION("malformed lock type in find");
          }
 
+         /**
+          * 提供2中版本的访问：lock::read_lock，lock::none；
+          * 1 lock::read_lock 应对外部绝大部分访问；
+          * 2 lock::none 应对外部Iterator等方式的访问，外部已加index_lock;
+          *
+          */
          template< typename ObjectType, typename IndexedByType, typename CompatibleKey >
-         const ObjectType& get( CompatibleKey&& key )const
+         const ObjectType& get( CompatibleKey&& key, lock_type &lock)const
          {
-             CHAINBASE_REQUIRE_READ_LOCK("get", ObjectType);
-             auto obj = find< ObjectType, IndexedByType >( std::forward< CompatibleKey >( key ) );
-             if( !obj ) BOOST_THROW_EXCEPTION( std::out_of_range( "unknown key" ) );
-             return *obj;
+            CHAINBASE_REQUIRE_READ_LOCK("get", ObjectType);
+            if (lock_type::read_lock == lock)
+				{
+					 // 加读锁，应对通用场景
+					 read_lock lock(get_index_mutex(ObjectType::type_id));
+
+					 auto obj = find< ObjectType, IndexedByType >( std::forward< CompatibleKey >( key ) );
+					 if( !obj ) BOOST_THROW_EXCEPTION( std::out_of_range( "unknown key" ) );
+					 return *obj;
+				}
+            else if (lock_type::none == lock)
+            {
+            		// 不加锁，务必注意外面必需要index_lock
+            		auto obj = find<ObjectType, IndexedByType>(
+					std::forward<CompatibleKey>(key));
+            		if (!obj)
+            			BOOST_THROW_EXCEPTION(std::out_of_range("unknown key"));
+            		return *obj;
+            }
+
+            BOOST_THROW_EXCEPTION(std::logic_error("malformed lock type in get"));
          }
 
+         /**
+          * 对于get不加锁，如果有需要在外层加，如果批量需要，就针对object做一个实例化，同时加read_lock
+          */
          template< typename ObjectType >
-         const ObjectType& get( const oid< ObjectType >& key = oid< ObjectType >() )const
+         const ObjectType& get( const oid< ObjectType >& key = oid< ObjectType >(), lock_type& lock)const
          {
-             CHAINBASE_REQUIRE_READ_LOCK("get", ObjectType);
-             auto obj = find< ObjectType >( key );
-             if( !obj ) BOOST_THROW_EXCEPTION( std::out_of_range( "unknown key") );
-             return *obj;
+         		CHAINBASE_REQUIRE_READ_LOCK("get", ObjectType);
+            if (lock_type::read_lock == lock)
+            {
+            		// read lock for common scenes
+            		read_lock lock(get_index_mutex(ObjectType::type_id));
+
+            		auto obj = find< ObjectType >( key );
+					if( !obj ) BOOST_THROW_EXCEPTION( std::out_of_range( "unknown key") );
+					return *obj;
+            }
+            else if (lock_type::none == lock)
+            {
+            		// not lock, u should lock outside! fishermen
+            		auto obj = find< ObjectType >( key );
+					if( !obj ) BOOST_THROW_EXCEPTION( std::out_of_range( "unknown key") );
+					return *obj;
+            }
+
+            BOOST_THROW_EXCEPTION(std::logic_error("malformed lock type in get"));
          }
 
          /**
@@ -964,45 +1069,70 @@ namespace chainbase {
           * 1 先查再改，查、check、改都需要同步，放到外部去 or 尽量在db内部进行？
           */
          template<typename ObjectType, typename Modifier>
-         void modify( const ObjectType& obj, Modifier&& m )
+         void modify( const ObjectType& obj, Modifier&& m, lock_type& lock)
          {
              CHAINBASE_REQUIRE_WRITE_LOCK("modify", ObjectType);
              typedef typename get_index_type<ObjectType>::type index_type;
 
-             // index 插入，加写锁
-             const uint16_t type_id = generic_index<index_type>::value_type::type_id;
-			    write_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+             if (lock_type::write_lock == lock)
+             {
+            	 	 // index 插入，加写锁
+					 write_lock lock(get_index_mutex(ObjectType::type_id));
 
-             get_mutable_index<index_type>().modify( obj, m );
+					 get_mutable_index<index_type>(lock_type::none).modify( obj, m );
+             }
+             else if (lock_type::none == lock)
+             {
+            	 	 // 不加写锁，外层必须得加index write lock
+            	 	 get_mutable_index<index_type>(lock_type::none).modify(obj, m);
+             }
+
+             BOOST_THROW_EXCEPTION(std::logic_error("malformed lock type in modify"));
          }
 
          /**
-          * TODO: 对于modify，需要评估改造方案：
-          * 1 先查再改，查、check、改都需要同步，放到外部去 or 尽量在db内部进行？
+          * 对于modify，改造方案如下：
+          * 1 单条删除，object lock + index lock 即可。
+          * 2 通过iterator（lower_bound、find等）操作，则需要在iterator外部进行index 加锁；
           */
          template<typename ObjectType>
-         void remove( const ObjectType& obj )
+         void remove( const ObjectType& obj, lock_type &lock)
          {
-             CHAINBASE_REQUIRE_WRITE_LOCK("remove", ObjectType);
-             typedef typename get_index_type<ObjectType>::type index_type;
+         		CHAINBASE_REQUIRE_WRITE_LOCK("remove", ObjectType);
+				typedef typename get_index_type<ObjectType>::type index_type;
 
-             const uint16_t type_id = generic_index<index_type>::value_type::type_id;
-             write_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+				if(lock_type::write_lock == lock) {
+					write_lock lock(get_index_mutex(ObjectType::type_id));
 
-             return get_mutable_index<index_type>().remove( obj );
+					return get_mutable_index<index_type>(lock_type::none).remove( obj );
+				}
+				else if (lock_type::none == lock)
+				{
+					return get_mutable_index<index_type>(lock_type::none).remove(obj);
+				}
+
+				BOOST_THROW_EXCEPTION(std::logic_error("malformed lock type in remove"));
          }
 
          template<typename ObjectType, typename Constructor>
-         const ObjectType& create( Constructor&& con )
+         const ObjectType& create( Constructor&& con, lock_type& lock)
          {
              CHAINBASE_REQUIRE_WRITE_LOCK("create", ObjectType);
              typedef typename get_index_type<ObjectType>::type index_type;
 
-             // index 插入，加写锁
-             const uint16_t type_id = generic_index<index_type>::value_type::type_id;
-             write_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+             if (lock_type::write_lock == lock)
+             {
+            	 	 // index 插入，加写锁
+					  write_lock lock(get_index_mutex(ObjectType::type_id));
 
-             return get_mutable_index<index_type>().emplace( std::forward<Constructor>(con) );
+					  return get_mutable_index<index_type>(lock_type::none).emplace( std::forward<Constructor>(con) );
+             }
+             else if (lock_type::none == lock)
+             {
+            	 	 return get_mutable_index<index_type>(lock_type::none).emplace( std::forward<Constructor>(con) );
+             }
+
+             BOOST_THROW_EXCEPTION("malformed lock type in create");
          }
 
          template< typename Lambda >
@@ -1057,7 +1187,7 @@ namespace chainbase {
 			template<typename MultiIndexType, typename Lambda>
 			auto with_index_read_lock(Lambda&& callback, uint64_t wait_micro = 1000000) -> decltype( (*(Lambda*)nullptr) ) {
 				const uint16_t type_id = generic_index<MultiIndexType>::value_type::type_id;
-				read_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+				read_lock lock(get_index_mutex(type_id), bip::defer_lock_type());
 
 				if (!wait_micro) {
 					lock.lock();
@@ -1074,7 +1204,7 @@ namespace chainbase {
 			auto with_index_write_lock(Lambda&& callback, uint64_t wait_micro = 1000000) -> decltype( (*(Lambda*)nullptr) )
 			{
 				const uint16_t type_id = generic_index<MultiIndexType>::value_type::type_id;
-				write_lock lock(_index_mutex_map[type_id].get(), bip::defer_lock_type());
+				write_lock lock(get_index_mutex(type_id), bip::defer_lock_type());
 
 				if (!wait_micro)
 				{
@@ -1111,7 +1241,20 @@ namespace chainbase {
          const abstract_index_cntr_t& get_abstract_index_cntr() const
             { return _index_list; }
 
-         chainbase::read_write_mutex get_object_mutex_by_hash(const uint32_t hash);
+         read_write_mutex get_object_mutex_by_hash(const uint32_t hash) const
+         {
+         		uint32_t pos = hash % _object_mutex_map.size();
+         	   	return _object_mutex_map[pos].get();
+         }
+
+         read_write_mutex get_index_mutex(const uint16_t type_id) const
+         {
+         		if (type_id >= _index_mutex_map.size()) {
+         			BOOST_THROW_EXCEPTION(std::logic_error("type_id: " +type_id + " is not in use!"));
+         		}
+
+         		return _index_mutex_map[type_id].get();
+         }
 
       private:
          template<typename MultiIndexType>
