@@ -1,6 +1,7 @@
 #ifndef _STEEM_JSON_RPC2_STATE_
 #define _STEEM_JSON_RPC2_STATE_
 
+#include <boost/thread/shared_mutex.hpp>
 #include <fc/thread/future.hpp>
 #include <fc/variant.hpp>
 #include <functional>
@@ -62,8 +63,9 @@ public:
     void close();
 
 private:
-    std::atomic<uint64_t> _next_id = 1;
+    std::atomic<uint64_t> _next_id;
     std::unordered_map<uint64_t, fc::promise<variant>::ptr> _awaiting;
+    mutable boost::shared_mutex _awaiting_mutex;
 };
 } // namespace rpc
 } // namespace fc
