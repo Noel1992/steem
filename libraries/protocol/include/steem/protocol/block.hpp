@@ -28,9 +28,6 @@ namespace steem { namespace protocol {
       vector<signed_transaction> transactions;
    };
 
-   //c++添加及维护依赖
-   typedef boost::interprocess::interprocess_sharable_mutex read_write_mutex;
-   typedef boost::unique_lock< read_write_mutex > write_lock;
 } } // steem::protocol
 
 FC_REFLECT_DERIVED( steem::protocol::signed_block, (steem::protocol::signed_block_header), (transactions) )

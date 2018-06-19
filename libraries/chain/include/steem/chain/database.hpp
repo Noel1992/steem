@@ -55,6 +55,8 @@ namespace steem { namespace chain {
 
          bool _log_hardforks = true;
 
+         boost::mutex      db_mutex;
+
          enum validation_steps
          {
             skip_nothing                = 0,
@@ -209,6 +211,9 @@ namespace steem { namespace chain {
             const fc::ecc::private_key& block_signing_private_key,
 			const std::vector<signed_transaction>&& pending_snapshot
             );
+
+         void apply_tx_with_undo(const signed_transaction& tx);
+         void apply_unkwon_tx(const signed_transaction& tx);
 
          void pop_block();
          void clear_pending();

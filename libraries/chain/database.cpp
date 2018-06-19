@@ -25,7 +25,7 @@
 
 #include <fc/smart_ref_impl.hpp>
 #include <fc/uint128.hpp>
-
+#include <fc/thread/scoped_lock.hpp>
 #include <fc/container/deque.hpp>
 
 #include <fc/io/fstream.hpp>
@@ -554,7 +554,7 @@ bool database::push_block(const signed_block& new_block, uint32_t skip,const std
    detail::with_skip_flags( *this, skip, [&]()
    {
 
-	   detail::without_pending_transactions( *this, pending_snapshot, [&]()
+	   detail::without_pending_transactions( *this, std::move(pending_snapshot), [&]()
 		 {
 			try
 			{
@@ -755,10 +755,10 @@ signed_block database::generate_block(
    {
       try
       {  //加入block维度的锁，控制_generate_block，通知生成_pending_tx的snapshot
-    	  std::vector< signed_transaction > _pending_snapshot;
-    	  _pending_snapshot( std::move(_pending_tx));
-
-         result = _generate_block( when, witness_owner, block_signing_private_key, _pending_snapshot);
+//    	  std::vector< signed_transaction >&& _pending_snapshot;
+//    	  _pending_snapshot( std::move(_pending_tx));
+    	  fc::scoped_lock sc_lock(db_mutex);
+          result = _generate_block( when, witness_owner, block_signing_private_key, std::move(_pending_tx));
       }
       FC_CAPTURE_AND_RETHROW( (witness_owner) )
    });
@@ -770,7 +770,7 @@ signed_block database::_generate_block(
    fc::time_point_sec when,
    const account_name_type& witness_owner,
    const fc::ecc::private_key& block_signing_private_key,
-   const std::vector<signed_transaction>&& pending_snapshot
+   const std::vector<signed_transaction>&& _pending_snapshot
    )
 {
    uint32_t skip = get_node_properties().skip_flags;
@@ -790,8 +790,6 @@ signed_block database::_generate_block(
 
    signed_block pending_block;
 
-   with_write_lock( [&]()
-   {
       //
       // The following code throws away existing pending_tx_session and
       // rebuilds it by re-applying pending transactions.
@@ -803,14 +801,24 @@ signed_block database::_generate_block(
       // the value of the "when" variable is known, which means we need to
       // re-apply pending transactions in this method.
       //
-	   //判断依据是什么？如果是block级别，如何计算幂等性
+	  //for _pending_snapshot -> idempotency in block
+      bool idempotency = true;
+      for(const signed_transaction& sptx :_pending_snapshot){
+    	    if(!is_idempotency(sptx)){
+    	    	idempotency = false;
+    	    	break;
+    	    }
+      }
+
+      if(!idempotency){
 	  _pending_tx_session.reset();
       _pending_tx_session = start_undo_session();
+      }
 
 
       uint64_t postponed_tx_count = 0;
       // pop pending state (reset to head block state)
-      for( const signed_transaction& tx : _pending_tx )
+      for( const signed_transaction& tx : _pending_snapshot )
       {
          // Only include transactions that have not expired yet for currently generating block,
          // this should clear problem transactions and allow block production to continue
@@ -829,18 +837,14 @@ signed_block database::_generate_block(
 
          try
          {
-        	bool idempotency = is_idempotency(tx);
-            auto temp_session = idempotency ? nullptr : start_undo_session();
-            if(!idempotency){
-            	_apply_transaction( tx );
-            	temp_session.squash();
-            }else{
-            	//需要判断tx是否已经存入数据库中
-            	 if(null != get(trx)){
-            		_apply_transaction( tx );
-            	 }
-            }
-
+        	 if(idempotency){
+        		 apply_unkwon_tx(tx);
+        	 }else{
+        		 apply_tx_with_undo(tx);
+        	 }
+//        	 auto temp_session = start_undo_session();
+//        	 _apply_transaction( tx );
+//        	 temp_session.squash();
 
             total_block_size += fc::raw::pack_size( tx );
             pending_block.transactions.push_back( tx );
@@ -857,8 +861,9 @@ signed_block database::_generate_block(
          wlog( "Postponed ${n} transactions due to block size limit", ("n", postponed_tx_count) );
       }
 
+      if(!idempotency){
       _pending_tx_session.reset();
-   });
+      }
 
    // We have temporarily broken the invariant that
    // _pending_tx_session is the result of applying _pending_tx, as
@@ -902,12 +907,24 @@ signed_block database::_generate_block(
       FC_ASSERT( fc::raw::pack_size(pending_block) <= STEEM_MAX_BLOCK_SIZE );
    }
 
-   with_write_lock( [&]()
-   {
-	   push_block( pending_block, skip, pending_snapshot);
-   });
+   push_block( pending_block, skip, std::move(_pending_snapshot));
+
    return pending_block;
 }
+
+void database::apply_tx_with_undo(const signed_transaction& tx){
+	 auto temp_session = start_undo_session();
+	 _apply_transaction( tx );
+	 temp_session.squash();
+}
+
+
+void database::apply_unkwon_tx(const signed_transaction& tx){
+	 if(!is_known_transaction(tx.id())){
+	 _apply_transaction( tx );
+	 }
+}
+
 
 /**
  * Removes the most recent block from the database and
