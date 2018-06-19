@@ -1148,7 +1148,9 @@ void account_witness_proxy_evaluator::do_apply( const account_witness_proxy_oper
    }
 }
 
-
+/**
+ * 这里只用index_lock会过于复杂，但好在有操作用户，所以可以结合object_lock + index_lock，可以较好解决。
+ */
 void account_witness_vote_evaluator::do_apply( const account_witness_vote_operation& o )
 {
    const auto& voter = _db.get_account( o.account );
@@ -1157,25 +1159,31 @@ void account_witness_vote_evaluator::do_apply( const account_witness_vote_operat
    if( o.approve )
       FC_ASSERT( voter.can_vote, "Account has declined its voting rights." );
 
+   // 后面会对witness做修改，此处先对该witness加object_lock写锁
+   write_lock witness_lock(_db.get_object_mutex(o.witness));
+
    const auto& witness = _db.get_witness( o.witness );
 
-   const auto& by_account_witness_idx = _db.get_index< witness_vote_index >().indices().get< by_account_witness >();
-   auto itr = by_account_witness_idx.find( boost::make_tuple( voter.name, witness.owner ) );
+   // 此处改为直接从db进行find获取，尽量减少get_index的调用
+   //const auto& by_account_witness_idx = _db.get_index< witness_vote_index >().indices().get< by_account_witness >();
+   //auto itr = by_account_witness_idx.find( boost::make_tuple( voter.name, witness.owner ) );
+   witness_vote_object* witness_vote = _db.find<witness_vote_object, by_account_witness>(lock_type::read_lock, boost::make_tuple( voter.name, witness.owner ));
 
-   if( itr == by_account_witness_idx.end() ) {
+   if( witness_vote == nullptr ) {
       FC_ASSERT( o.approve, "Vote doesn't exist, user must indicate a desire to approve witness." );
 
       if ( _db.has_hardfork( STEEM_HARDFORK_0_2 ) )
       {
          FC_ASSERT( voter.witnesses_voted_for < STEEM_MAX_ACCOUNT_WITNESS_VOTES, "Account has voted for too many witnesses." ); // TODO: Remove after hardfork 2
 
-         _db.create<witness_vote_object>( [&]( witness_vote_object& v ) {
+         _db.create<witness_vote_object>( [&]( lock_type::write_lock, witness_vote_object& v ) {
              v.witness = witness.owner;
              v.account = voter.name;
          });
 
          if( _db.has_hardfork( STEEM_HARDFORK_0_3 ) ) {
-            _db.adjust_witness_vote( witness, voter.witness_vote_weight() );
+         		FC_ASSERT(false, "only support latest hardfork!");
+            _db.adjust_witness_vote( lock_type::write_lock, witness, voter.witness_vote_weight() );
          }
          else {
             _db.adjust_proxied_witness_votes( voter, voter.witness_vote_weight() );
@@ -1183,16 +1191,16 @@ void account_witness_vote_evaluator::do_apply( const account_witness_vote_operat
 
       } else {
 
-         _db.create<witness_vote_object>( [&]( witness_vote_object& v ) {
+         _db.create<witness_vote_object>( lock_type::write_lock, [&]( witness_vote_object& v ) {
              v.witness = witness.owner;
              v.account = voter.name;
          });
-         _db.modify( witness, [&]( witness_object& w ) {
+         _db.modify( lock_type::write_lock, witness, [&]( witness_object& w ) {
              w.votes += voter.witness_vote_weight();
          });
 
       }
-      _db.modify( voter, [&]( account_object& a ) {
+      _db.modify( lock_type::write_lock, voter, [&]( account_object& a ) {
          a.witnesses_voted_for++;
       });
 
@@ -1201,19 +1209,22 @@ void account_witness_vote_evaluator::do_apply( const account_witness_vote_operat
 
       if (  _db.has_hardfork( STEEM_HARDFORK_0_2 ) ) {
          if( _db.has_hardfork( STEEM_HARDFORK_0_3 ) )
-            _db.adjust_witness_vote( witness, -voter.witness_vote_weight() );
+            _db.adjust_witness_vote( lock_type::write_lock, witness, -voter.witness_vote_weight() );
          else
             _db.adjust_proxied_witness_votes( voter, -voter.witness_vote_weight() );
       } else  {
-         _db.modify( witness, [&]( witness_object& w ) {
+         _db.modify( lock_type::write_lock, witness, [&]( witness_object& w ) {
              w.votes -= voter.witness_vote_weight();
          });
       }
-      _db.modify( voter, [&]( account_object& a ) {
+      _db.modify( lock_type::write_lock, voter, [&]( account_object& a ) {
          a.witnesses_voted_for--;
       });
-      _db.remove( *itr );
+      _db.remove( lock_type::write_lock, *witness_vote );
    }
+
+   // witness加object_lock 解锁， 额外做一个解锁动作，方便后续加新逻辑
+   witness_lock.unlock();
 }
 
 void vote_evaluator::do_apply( const vote_operation& o )

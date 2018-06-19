@@ -27,6 +27,7 @@ namespace steem { namespace chain {
    using steem::protocol::asset;
    using steem::protocol::asset_symbol_type;
    using steem::protocol::price;
+   using chainbase::lock_type;
 
    typedef boost::interprocess::interprocess_sharable_mutex read_write_mutex;
    typedef boost::interprocess::sharable_lock< read_write_mutex > read_lock;
@@ -337,10 +338,10 @@ namespace steem { namespace chain {
          void adjust_proxied_witness_votes( const account_object& a, share_type delta, int depth = 0 );
 
          /** this is called by `adjust_proxied_witness_votes` when account proxy to self */
-         void adjust_witness_votes( const account_object& a, share_type delta );
+         void adjust_witness_votes( const account_name_type& name, share_type delta );
 
          /** this updates the vote of a single witness as a result of a vote being added or removed*/
-         void adjust_witness_vote( const witness_object& obj, share_type delta );
+         void adjust_witness_vote( lock_type lock, const witness_object& obj, share_type delta );
 
          /** clears all vote records for a particular account but does not update the
           * witness vote totals.  Vote totals should be updated first via a call to

@@ -96,6 +96,8 @@ namespace chainbase {
    template<typename T>
    using shared_vector = std::vector<T, allocator<T> >;
 
+   enum class lock_type {none, read_lock, write_lock};
+
    struct strcmp_less
    {
       bool operator()( const shared_string& a, const shared_string& b )const
@@ -757,8 +759,6 @@ namespace chainbase {
          }
 #endif
 
-         enum class lock_type {none, read_lock, write_lock};
-
          struct session {
             public:
                session( session&& s )
@@ -855,8 +855,11 @@ namespace chainbase {
             return _index_map.size() > index_type::value_type::type_id && _index_map[index_type::value_type::type_id];
          }
 
+         /**
+          * 此处有两个get_index函数，但一个是const，模版参数也不同；
+          */
          template<typename MultiIndexType>
-         const generic_index<MultiIndexType>& get_index(lock_type &lock)const
+         const generic_index<MultiIndexType>& get_index(lock_type lock)const
          {
             CHAINBASE_REQUIRE_READ_LOCK("get_index", typename MultiIndexType::value_type);
             typedef generic_index<MultiIndexType> index_type;
@@ -876,7 +879,7 @@ namespace chainbase {
          }
 
          template<typename MultiIndexType>
-         void add_index_extension( std::shared_ptr< index_extension > ext, lock_type &lock )
+         void add_index_extension( lock_type lock, std::shared_ptr< index_extension > ext )
          {
             typedef generic_index<MultiIndexType> index_type;
 
@@ -905,7 +908,7 @@ namespace chainbase {
           * 强制传入lock_type,来强制检查所有调用地！ fishermen
           */
          template<typename MultiIndexType, typename ByIndex>
-         auto get_index(lock_type &lock)const -> decltype( ((generic_index<MultiIndexType>*)( nullptr ))->indicies().template get<ByIndex>() )
+         auto get_index(lock_type lock)const -> decltype( ((generic_index<MultiIndexType>*)( nullptr ))->indicies().template get<ByIndex>() )
          {
             CHAINBASE_REQUIRE_READ_LOCK("get_index", typename MultiIndexType::value_type);
             typedef generic_index<MultiIndexType> index_type;
@@ -929,7 +932,7 @@ namespace chainbase {
           * 强制传入lock_type,来强制检查所有调用地！ fishermen
           */
          template<typename MultiIndexType>
-         generic_index<MultiIndexType>& get_mutable_index(lock_type &lock)
+         generic_index<MultiIndexType>& get_mutable_index(lock_type lock)
          {
             CHAINBASE_REQUIRE_WRITE_LOCK("get_mutable_index", typename MultiIndexType::value_type);
             typedef generic_index<MultiIndexType> index_type;
@@ -950,7 +953,7 @@ namespace chainbase {
          }
 
          template< typename ObjectType, typename IndexedByType, typename CompatibleKey >
-         const ObjectType* find( CompatibleKey&& key, lock_type &lock )const
+         const ObjectType* find( lock_type lock, CompatibleKey&& key)const
          {
              CHAINBASE_REQUIRE_READ_LOCK("find", ObjectType);
              typedef typename get_index_type< ObjectType >::type index_type;
@@ -978,7 +981,7 @@ namespace chainbase {
          }
 
          template< typename ObjectType >
-         const ObjectType* find( oid< ObjectType > key = oid< ObjectType >(), lock_type& lock ) const
+         const ObjectType* find( lock_type lock, oid< ObjectType > key = oid< ObjectType >()) const
          {
              CHAINBASE_REQUIRE_READ_LOCK("find", ObjectType);
              typedef typename get_index_type< ObjectType >::type index_type;
@@ -1012,7 +1015,7 @@ namespace chainbase {
           *
           */
          template< typename ObjectType, typename IndexedByType, typename CompatibleKey >
-         const ObjectType& get( CompatibleKey&& key, lock_type &lock)const
+         const ObjectType& get( lock_type lock, CompatibleKey&& key)const
          {
             CHAINBASE_REQUIRE_READ_LOCK("get", ObjectType);
             if (lock_type::read_lock == lock)
@@ -1041,7 +1044,7 @@ namespace chainbase {
           * 对于get不加锁，如果有需要在外层加，如果批量需要，就针对object做一个实例化，同时加read_lock
           */
          template< typename ObjectType >
-         const ObjectType& get( const oid< ObjectType >& key = oid< ObjectType >(), lock_type& lock)const
+         const ObjectType& get( lock_type lock, oid< ObjectType >& key = oid< ObjectType >())const
          {
          		CHAINBASE_REQUIRE_READ_LOCK("get", ObjectType);
             if (lock_type::read_lock == lock)
@@ -1069,7 +1072,7 @@ namespace chainbase {
           * 1 先查再改，查、check、改都需要同步，放到外部去 or 尽量在db内部进行？
           */
          template<typename ObjectType, typename Modifier>
-         void modify( const ObjectType& obj, Modifier&& m, lock_type& lock)
+         void modify( lock_type lock, const ObjectType& obj, Modifier&& m)
          {
              CHAINBASE_REQUIRE_WRITE_LOCK("modify", ObjectType);
              typedef typename get_index_type<ObjectType>::type index_type;
@@ -1096,7 +1099,7 @@ namespace chainbase {
           * 2 通过iterator（lower_bound、find等）操作，则需要在iterator外部进行index 加锁；
           */
          template<typename ObjectType>
-         void remove( const ObjectType& obj, lock_type &lock)
+         void remove( lock_type lock, const ObjectType& obj)
          {
          		CHAINBASE_REQUIRE_WRITE_LOCK("remove", ObjectType);
 				typedef typename get_index_type<ObjectType>::type index_type;
@@ -1115,7 +1118,7 @@ namespace chainbase {
          }
 
          template<typename ObjectType, typename Constructor>
-         const ObjectType& create( Constructor&& con, lock_type& lock)
+         const ObjectType& create( lock_type lock, Constructor&& con)
          {
              CHAINBASE_REQUIRE_WRITE_LOCK("create", ObjectType);
              typedef typename get_index_type<ObjectType>::type index_type;
@@ -1247,6 +1250,9 @@ namespace chainbase {
          	   	return _object_mutex_map[pos].get();
          }
 
+         /**
+          * TODO: 先用都写锁，如果存在死锁的情况，再改成递归锁boost::recursive_mutex fishermen
+          */
          read_write_mutex get_index_mutex(const uint16_t type_id) const
          {
          		if (type_id >= _index_mutex_map.size()) {
