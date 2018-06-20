@@ -515,6 +515,9 @@ const time_point_sec database::calculate_discussion_payout_time( const comment_o
       return get< comment_object >( lock_type::read_lock, comment.root_comment ).cashout_time;
 }
 
+/**
+ * 全局性属性 reward_fund_object，参数c没有使用
+ */
 const reward_fund_object& database::get_reward_fund( const comment_object& c ) const
 {
    return get< reward_fund_object, by_name >( lock_type::read_lock, STEEM_POST_REWARD_FUND_NAME );
@@ -1435,7 +1438,6 @@ void database::update_owner_authority( const account_object& account, const auth
 void database::process_vesting_withdrawals()
 {
 	// 按object_type的顺序进行加写锁，然后获取数据，后面统一再处理
-	write_lock dynamic_global_properties_lock(dynamic_global_property_object::type_id);
 	write_lock account_lock(get_index_mutex(account_object::type_id));
 	write_lock withdraw_vesting_route_lock(get_index_mutex(withdraw_vesting_route_object::type_id));
 
@@ -1448,6 +1450,8 @@ void database::process_vesting_withdrawals()
    std::list<boost::tuple<account_name_type, share_type>> auto_vest_deposits;
 	std::list<fill_vesting_withdraw_operation> auto_vest_withdraw_operations;
 	std::list<fill_vesting_withdraw_operation> not_auto_vest_withdraw_operations;
+	std::list<boost::tuple<account_name_type, share_type>> from_account_withdraws;
+	std::list<fill_vesting_withdraw_operation> from_account_withdraw_operations;
 
    while( current != widx.end() && current->next_vesting_withdrawal <= head_block_time() )
    {
@@ -1506,7 +1510,7 @@ void database::process_vesting_withdrawals()
       {
          if( !itr->auto_vest )
          {
-         		// account_index 已经在最外层加写锁
+         		// account_index 已经在最外层加写锁，
             const auto& to_account = get< account_object, by_name >( lock_type::none, itr->to_account );
 
             share_type to_deposit = ( ( fc::uint128_t ( to_withdraw.value ) * itr->percent ) / STEEM_100_PERCENT ).to_uint64();
@@ -1559,22 +1563,64 @@ void database::process_vesting_withdrawals()
          }
       });
 
-      modify( lock_type::write_lock, cprops, [&]( dynamic_global_property_object& o )
+      // dynamic_global_property_index 外层已加写锁
+      modify( lock_type::none, cprops, [&]( dynamic_global_property_object& o )
       {
          o.total_vesting_fund_steem -= converted_steem;
          o.total_vesting_shares.amount -= to_convert;
       });
 
-      if( to_withdraw > 0 )
-         adjust_proxied_witness_votes( from_account, -to_withdraw );
+      // 外部函数修改分拆到锁外部
+      if( to_withdraw > 0 ) {
+      		from_account_withdraws.push_back(boost::make_tuple(from_account, -to_withdraw));
+         // adjust_proxied_witness_votes( from_account, -to_withdraw );
+      }
 
-      push_virtual_operation( fill_vesting_withdraw_operation( from_account.name, from_account.name, asset( to_convert, VESTS_SYMBOL ), converted_steem ) );
+      from_account_withdraw_operations.push_back(fill_vesting_withdraw_operation( from_account.name, from_account.name, asset( to_convert, VESTS_SYMBOL ), converted_steem ));
+      //push_virtual_operation( fill_vesting_withdraw_operation( from_account.name, from_account.name, asset( to_convert, VESTS_SYMBOL ), converted_steem ) );
    }
+
+   // 反向解锁
+   withdraw_vesting_route_lock.unlock();
+   account_lock.unlock();
+
+   std::list<fill_vesting_withdraw_operation> auto_vest_withdraw_operations;
+   	std::list<fill_vesting_withdraw_operation> not_auto_vest_withdraw_operations;
+   	std::list<boost::tuple<account_name_type, share_type>> from_account_withdraws;
+   	std::list<fill_vesting_withdraw_operation> from_account_withdraw_operations;
+
+   /*==== 外部调用处理需要在锁外部进行 ====*/
+
+   for (auto itr = auto_vest_deposits.begin(); itr != auto_vest_deposits.end(); ++itr)
+   {
+   		adjust_proxied_witness_votes( itr->get<0>(), itr->get<1>() );
+   }
+
+   for (auto itr = auto_vest_withdraw_operations.begin(); itr != auto_vest_withdraw_operations.end(); ++itr)
+   {
+   		push_virtual_operation( *itr);
+   }
+
+   for (auto itr = not_auto_vest_withdraw_operations.begin(); itr != not_auto_vest_withdraw_operations.end(); ++itr)
+   {
+   		push_virtual_operation(*itr);
+   }
+
+   for (auto itr = from_account_withdraws.begin(); itr != from_account_withdraws.end(); ++itr)
+   {
+   		adjust_proxied_witness_votes(itr->get<0>(), itr->get<1>());
+   }
+
+   for (auto itr = from_account_withdraw_operations.begin(); itr != from_account_withdraw_operations.end(); ++itr)
+   {
+   		push_virtual_operation(*itr);
+   }
+
 }
 
 void database::adjust_total_payout( const comment_object& cur, const asset& sbd_created, const asset& curator_sbd_value, const asset& beneficiary_value )
 {
-   modify( cur, [&]( comment_object& c )
+   modify( lock_type::write_lock, cur, [&]( comment_object& c )
    {
       // input assets should be in sbd
       c.total_payout_value += sbd_created;
@@ -1605,6 +1651,11 @@ share_type database::pay_curators( const comment_object& c, share_type& max_rewa
       }
       else if( c.total_vote_weight > 0 )
       {
+      		// 给 comment_vote_index 加读锁，用于indics 条件选择
+      		read_lock comment_vote_lock(get_index_mutex(comment_vote_object::type_id));
+
+      		std::list<boost::tuple<account_id_type, uint64_t>> voters;
+
          const auto& cvidx = get_index<comment_vote_index>().indices().get<by_comment_weight_voter>();
          auto itr = cvidx.lower_bound( c.id );
          while( itr != cvidx.end() && itr->comment == c.id )
@@ -1614,7 +1665,11 @@ share_type database::pay_curators( const comment_object& c, share_type& max_rewa
             if( claim > 0 ) // min_amt is non-zero satoshis
             {
                unclaimed_rewards -= claim;
-               const auto& voter = get(itr->voter);
+
+               // 下面的操作包含外部操作，需要独立在comment_vote_index锁外部进行
+               voters.push_back(boost::make_tuple(itr->voter, claim));
+               /*
+               const auto& voter = get(itr->voter); // itr->voter: account_id_type / oid< account_object>
                auto reward = create_vesting( voter, asset( claim, STEEM_SYMBOL ), has_hardfork( STEEM_HARDFORK_0_17__659 ) );
 
                push_virtual_operation( curation_reward_operation( voter.name, reward, c.author, to_string( c.permlink ) ) );
@@ -1625,8 +1680,28 @@ share_type database::pay_curators( const comment_object& c, share_type& max_rewa
                      a.curation_rewards += claim;
                   });
                #endif
+               */
             }
             ++itr;
+         }
+
+         // 对comment_vote_index解锁
+         comment_vote_lock.unlock();
+
+         // 在锁外部进行外部函数调用，分别独立加锁
+         for (auto itr = voters.begin(); itr != voters.end(); ++itr)
+         {
+         		const auto& voter = get(lock_type::read_lock, itr->get<0>()); // itr->voter: account_id_type / oid< account_object>
+				auto reward = create_vesting( voter, asset( itr->get<1>(), STEEM_SYMBOL ), has_hardfork( STEEM_HARDFORK_0_17__659 ) );
+
+				push_virtual_operation( curation_reward_operation( voter.name, reward, c.author, to_string( c.permlink ) ) );
+
+				#ifndef IS_LOW_MEM
+					modify( lock_type::write_lock, voter, [&]( account_object& a )
+					{
+						a.curation_rewards += claim;
+					});
+				#endif
          }
       }
       max_rewards -= unclaimed_rewards;
@@ -1694,12 +1769,12 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
             push_virtual_operation( comment_reward_operation( comment.author, to_string( comment.permlink ), to_sbd( asset( claimed_reward, STEEM_SYMBOL ) ) ) );
 
             #ifndef IS_LOW_MEM
-               modify( comment, [&]( comment_object& c )
+               modify( lock_type::write_lock, comment, [&]( comment_object& c )
                {
                   c.author_rewards += author_tokens;
                });
 
-               modify( get_account( comment.author ), [&]( account_object& a )
+               modify( lock_type::write_lock, get_account( comment.author ), [&]( account_object& a )
                {
                   a.posting_rewards += author_tokens;
                });
@@ -1711,7 +1786,7 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
             adjust_rshares2( comment, util::evaluate_reward_curve( comment.net_rshares.value ), 0 );
       }
 
-      modify( comment, [&]( comment_object& c )
+      modify( lock_type::write_lock, comment, [&]( comment_object& c )
       {
          /**
          * A payout is only made for positive rshares, negative rshares hang around
@@ -1742,6 +1817,9 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
 
       push_virtual_operation( comment_payout_update_operation( comment.author, to_string( comment.permlink ) ) );
 
+      // 锁住comment_vote_index，进行读取、判断、更新
+      write_lock comment_vote_lock(get_index_mutex(comment_vote_object::type_id));
+
       const auto& vote_idx = get_index< comment_vote_index >().indices().get< by_comment_voter >();
       auto vote_itr = vote_idx.lower_bound( comment.id );
       while( vote_itr != vote_idx.end() && vote_itr->comment == comment.id )
@@ -1762,6 +1840,9 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
 #endif
          }
       }
+
+      // 即便要退出了，也顺手unlock 你，万一后面又加逻辑呢
+      comment_vote_lock.unlock();
 
       return claimed_reward;
    } FC_CAPTURE_AND_RETHROW( (comment) )
@@ -1810,6 +1891,9 @@ void database::process_comment_cashout()
       funds.push_back( rf_ctx );
    }
 
+   // 对comment_index 加读锁，构建所需数据
+   read_lock comment_lock(get_index_mutex(comment_object::type_id));
+
    const auto& cidx        = get_index< comment_index >().indices().get< by_cashout_time >();
    const auto& com_by_root = get_index< comment_index >().indices().get< by_root >();
 
@@ -1821,6 +1905,7 @@ void database::process_comment_cashout()
       {
          if( current->net_rshares > 0 )
          {
+         		// 获取全局性属性 reward_fund_object，参数c没有使用
             const auto& rf = get_reward_fund( *current );
             funds[ rf.id._id ].recent_claims += util::evaluate_reward_curve( current->net_rshares.value, rf.author_reward_curve, rf.content_constant );
          }
@@ -1844,6 +1929,8 @@ void database::process_comment_cashout()
     * the global state updated each payout. After the hardfork, each payout is done
     * against a reward fund state that is snapshotted before all payouts in the block.
     */
+   std::list<boost::tuple<util::comment_reward_context, comment_object>> reward_comments;
+
    while( current != cidx.end() && current->cashout_time <= head_block_time() )
    {
       if( has_hardfork( STEEM_HARDFORK_0_17__771 ) )
@@ -1851,10 +1938,15 @@ void database::process_comment_cashout()
          auto fund_id = get_reward_fund( *current ).id._id;
          ctx.total_reward_shares2 = funds[ fund_id ].recent_claims;
          ctx.total_reward_fund_steem = funds[ fund_id ].reward_balance;
-         funds[ fund_id ].steem_awarded += cashout_comment_helper( ctx, *current );
+
+         // 外部函数 cashout_comment_helper需要放到锁外部独立执行
+         reward_comments.push_back(boost::make_tuple(ctx, *current));
+         // funds[ fund_id ].steem_awarded += cashout_comment_helper( ctx, *current );
       }
       else
       {
+      		// 老版先本不支持了
+      		/*
          auto itr = com_by_root.lower_bound( current->root_comment );
          while( itr != com_by_root.end() && itr->root_comment == current->root_comment )
          {
@@ -1871,10 +1963,19 @@ void database::process_comment_cashout()
                   p.total_reward_fund_steem.amount -= reward;
                });
             }
-         }
+         } */
       }
 
       current = cidx.begin();
+   }
+
+   // comment_index 的读锁进行解锁
+   comment_lock.unlock();
+
+   for (auto itr = reward_comments.begin(); itr != reward_comments.end(); ++itr)
+   {
+   		auto fund_id = get_reward_fund( itr->get<1>() ).id._id;
+   		funds[ fund_id ].steem_awarded += cashout_comment_helper( itr->get<0>(), itr->get<1>() );
    }
 
    // Write the cached fund state back to the database
@@ -1882,7 +1983,7 @@ void database::process_comment_cashout()
    {
       for( size_t i = 0; i < funds.size(); i++ )
       {
-         modify( get< reward_fund_object, by_id >( reward_fund_id_type( i ) ), [&]( reward_fund_object& rfo )
+         modify( lock_type::write_lock, get< reward_fund_object, by_id >( reward_fund_id_type( i ) ), [&]( reward_fund_object& rfo )
          {
             rfo.recent_claims = funds[ i ].recent_claims;
             rfo.reward_balance -= asset( funds[ i ].steem_awarded, STEEM_SYMBOL );
@@ -1942,7 +2043,7 @@ void database::process_funds()
 
       new_steem = content_reward + vesting_reward + witness_reward;
 
-      modify( props, [&]( dynamic_global_property_object& p )
+      modify( lock_type::write_lock, props, [&]( dynamic_global_property_object& p )
       {
          p.total_vesting_fund_steem += asset( vesting_reward, STEEM_SYMBOL );
          if( !has_hardfork( STEEM_HARDFORK_0_17__774 ) )
@@ -1969,7 +2070,7 @@ void database::process_funds()
       else
          vesting_reward.amount.value *= 9;
 
-      modify( props, [&]( dynamic_global_property_object& p )
+      modify( lock_type::write_lock, props, [&]( dynamic_global_property_object& p )
       {
           p.total_vesting_fund_steem += vesting_reward;
           p.total_reward_fund_steem  += content_reward;
@@ -1981,22 +2082,46 @@ void database::process_funds()
 
 void database::process_savings_withdraws()
 {
+  std::list<fill_transfer_from_savings_operation> transfer_ops;
+
+  // 对saving_withdraw_index 加写锁，信息记录到transfer_ops,并做清理动作
+  write_lock saving_withdraw_lock(get_index_mutex(savings_withdraw_object::type_id));
+
   const auto& idx = get_index< savings_withdraw_index >().indices().get< by_complete_from_rid >();
   auto itr = idx.begin();
   while( itr != idx.end() ) {
      if( itr->complete > head_block_time() )
         break;
+
+     // 信息记录到transfer_ops
+     transfer_ops.push_back(fill_transfer_from_savings_operation( itr->from, itr->to, itr->amount, itr->request_id, to_string( itr->memo) ));
+     /*
      adjust_balance( get_account( itr->to ), itr->amount );
 
-     modify( get_account( itr->from ), [&]( account_object& a )
+     modify( lock_type::write_lock, get_account( itr->from ), [&]( account_object& a )
      {
         a.savings_withdraw_requests--;
      });
 
      push_virtual_operation( fill_transfer_from_savings_operation( itr->from, itr->to, itr->amount, itr->request_id, to_string( itr->memo) ) );
-
+	  */
      remove( *itr );
      itr = idx.begin();
+  }
+
+  // 对saving_withdraw_index的写锁进行解锁
+  saving_withdraw_lock.unlock();
+
+  for (auto itr = transfer_ops.begin(); itr != transfer_ops.end(); ++itr)
+  {
+	   adjust_balance( get_account( itr->to ), itr->amount );
+
+		modify( lock_type::write_lock, get_account( itr->from ), [&]( account_object& a )
+		{
+			a.savings_withdraw_requests--;
+		});
+
+		push_virtual_operation( *itr );
   }
 }
 
@@ -2043,7 +2168,7 @@ asset database::get_producer_reward()
    }
    else
    {
-      modify( get_account( witness_account.name), [&]( account_object& a )
+      modify( lock_type::write_lock, get_account( witness_account.name), [&]( account_object& a )
       {
          a.balance += pay;
       } );
@@ -2083,13 +2208,20 @@ void database::pay_liquidity_reward()
       if( reward.amount == 0 )
          return;
 
+      // 对liquidity_reward_balance_index加读锁，获取所需的obj
+      read_lock liquidity_reward_lock(get_index_mutex(liquidity_reward_balance_object::type_id));
+
       const auto& ridx = get_index< liquidity_reward_balance_index >().indices().get< by_volume_weight >();
       auto itr = ridx.begin();
       if( itr != ridx.end() && itr->volume_weight() > 0 )
       {
+      		// liquidity_reward_balance_index 读锁进行解锁
+      		liquidity_reward_lock.unlock();
+
          adjust_supply( reward, true );
-         adjust_balance( get(itr->owner), reward );
-         modify( *itr, [&]( liquidity_reward_balance_object& obj )
+         adjust_balance( get(lock_type::read_lock, itr->owner), reward );
+
+         modify( lock_type::write_lock, *itr, [&]( liquidity_reward_balance_object& obj )
          {
             obj.steem_volume = 0;
             obj.sbd_volume   = 0;
@@ -2097,7 +2229,7 @@ void database::pay_liquidity_reward()
             obj.weight = 0;
          } );
 
-         push_virtual_operation( liquidity_reward_operation( get(itr->owner).name, reward ) );
+         push_virtual_operation( liquidity_reward_operation( get(lock_type::read_lock, itr->owner).name, reward ) );
       }
    }
 }
@@ -2114,7 +2246,10 @@ uint16_t database::get_curation_rewards_percent( const comment_object& c ) const
 
 share_type database::pay_reward_funds( share_type reward )
 {
-   const auto& reward_idx = get_index< reward_fund_index, by_id >();
+	// 对reward_fund_index加写锁
+	write_lock reward_fund_lock(get_index_mutex(reward_fund_object::type_id));
+
+   const auto& reward_idx = get_index< reward_fund_index, by_id >(lock_type::none);
    share_type used_rewards = 0;
 
    for( auto itr = reward_idx.begin(); itr != reward_idx.end(); ++itr )
@@ -2122,7 +2257,7 @@ share_type database::pay_reward_funds( share_type reward )
       // reward is a per block reward and the percents are 16-bit. This should never overflow
       auto r = ( reward * itr->percent_content_rewards ) / STEEM_100_PERCENT;
 
-      modify( *itr, [&]( reward_fund_object& rfo )
+      modify( lock_type::none, *itr, [&]( reward_fund_object& rfo )
       {
          rfo.reward_balance += asset( r, STEEM_SYMBOL );
       });
@@ -2132,6 +2267,9 @@ share_type database::pay_reward_funds( share_type reward )
       // Sanity check to ensure we aren't printing more STEEM than has been allocated through inflation
       FC_ASSERT( used_rewards <= reward );
    }
+
+   // reward_fund_index 解锁，避免追加代码修改
+   reward_fund_lock.unlock();
 
    return used_rewards;
 }
@@ -2144,7 +2282,12 @@ share_type database::pay_reward_funds( share_type reward )
 void database::process_conversions()
 {
    auto now = head_block_time();
-   const auto& request_by_date = get_index< convert_request_index >().indices().get< by_conversion_date >();
+
+   std::list<fill_convert_request_operation> fill_ops;
+   // 对convert_request_index加写锁，获取数据并进行数据清理
+   write_lock covert_lock(get_index_mutex(convert_request_object::type_id));
+
+   const auto& request_by_date = get_index< convert_request_index >(lock_type::none).indices().get< by_conversion_date >();
    auto itr = request_by_date.begin();
 
    const auto& fhistory = get_feed_history();
@@ -2158,19 +2301,32 @@ void database::process_conversions()
    {
       auto amount_to_issue = itr->amount * fhistory.current_median_history;
 
-      adjust_balance( itr->owner, amount_to_issue );
+      fill_ops.push_back(fill_convert_request_operation ( itr->owner, itr->requestid, itr->amount, amount_to_issue ) );
+
+      // 下面逻辑移到cover_lock之外
+      //adjust_balance( itr->owner, amount_to_issue );
 
       net_sbd   += itr->amount;
       net_steem += amount_to_issue;
 
-      push_virtual_operation( fill_convert_request_operation ( itr->owner, itr->requestid, itr->amount, amount_to_issue ) );
+      // 下面逻辑移到cover_lock之外
+      //push_virtual_operation( fill_convert_request_operation ( itr->owner, itr->requestid, itr->amount, amount_to_issue ) );
 
-      remove( *itr );
+      remove( lock_type::none, *itr );
       itr = request_by_date.begin();
    }
 
+   // 对convert_request_index的写锁进行解锁
+   covert_lock.unlock();
+
+   for (auto itr = fill_ops.begin(); itr != fill_ops.end(); ++itr)
+   {
+   		adjust_balance( itr->owner, itr->amount_out );
+   		push_virtual_operation(*itr);
+   }
+
    const auto& props = get_dynamic_global_properties();
-   modify( props, [&]( dynamic_global_property_object& p )
+   modify( lock_type::write_lock, props, [&]( dynamic_global_property_object& p )
    {
        p.current_supply += net_steem;
        p.current_sbd_supply -= net_sbd;
@@ -2192,43 +2348,77 @@ asset database::to_steem( const asset& sbd )const
 void database::account_recovery_processing()
 {
    // Clear expired recovery requests
+	// 对account_recovery_request_index加写锁
+	write_lock account_recovery_request_lock(get_index_mutex(account_recovery_request_object::type_id));
+
    const auto& rec_req_idx = get_index< account_recovery_request_index >().indices().get< by_expiration >();
    auto rec_req = rec_req_idx.begin();
 
    while( rec_req != rec_req_idx.end() && rec_req->expires <= head_block_time() )
    {
-      remove( *rec_req );
+      remove( lock_type::none, *rec_req );
       rec_req = rec_req_idx.begin();
    }
 
+   // 对 account_recovery_request_index的写锁进行解锁
+   account_recovery_request_lock.unlock();
+
    // Clear invalid historical authorities
+   // 对owner_authority_history_index加写锁
+   write_lock owner_authority_history_lock(get_index_mutex(owner_authority_history_object::type_id));
+
    const auto& hist_idx = get_index< owner_authority_history_index >().indices(); //by id
    auto hist = hist_idx.begin();
 
    while( hist != hist_idx.end() && time_point_sec( hist->last_valid_time + STEEM_OWNER_AUTH_RECOVERY_PERIOD ) < head_block_time() )
    {
-      remove( *hist );
+      remove( lock_type::none, *hist );
       hist = hist_idx.begin();
    }
 
+   // 对owner_authority_history_index写锁进行解锁
+   owner_authority_history_lock.unlock();
+
    // Apply effective recovery_account changes
+   // 对change_recovery_account_request_index 加写锁
+   write_lock change_recovery_account_request_lock(get_index_mutex(change_recovery_account_request_object::type_id));
+
+   std::list<boost::tuple<account_name_type, account_name_type>> accounts;
    const auto& change_req_idx = get_index< change_recovery_account_request_index >().indices().get< by_effective_date >();
    auto change_req = change_req_idx.begin();
 
    while( change_req != change_req_idx.end() && change_req->effective_on <= head_block_time() )
    {
+   		accounts.push_back(boost::make_tuple(change_req->account_to_recover, change_req->recovery_account));
+   		// 下面逻辑移到lock外部
+   		/*
       modify( get_account( change_req->account_to_recover ), [&]( account_object& a )
       {
          a.recovery_account = change_req->recovery_account;
-      });
+      });*/
 
-      remove( *change_req );
+      remove( lock_type::none, *change_req );
       change_req = change_req_idx.begin();
+   }
+
+   // 对change_recovery_account_request_index的写锁解锁
+   change_recovery_account_request_lock.unlock();
+
+   for (auto itr = accounts.begin(); itr != accounts.end(); ++itr)
+   {
+   		modify( lock_type::write_lock, get_account( itr->get<0>() ), [&]( account_object& a )
+   	      {
+   	         a.recovery_account = itr->get<1>();
+   	      });
    }
 }
 
 void database::expire_escrow_ratification()
 {
+	// 先对escrow_index加写锁
+	write_lock escrow_lock(get_index_mutex(escrow_object::type_id));
+
+	std::list<escrow_object> escrows;
    const auto& escrow_idx = get_index< escrow_index >().indices().get< by_ratification_deadline >();
    auto escrow_itr = escrow_idx.lower_bound( false );
 
@@ -2237,16 +2427,35 @@ void database::expire_escrow_ratification()
       const auto& old_escrow = *escrow_itr;
       ++escrow_itr;
 
-      adjust_balance( old_escrow.from, old_escrow.steem_balance );
-      adjust_balance( old_escrow.from, old_escrow.sbd_balance );
-      adjust_balance( old_escrow.from, old_escrow.pending_fee );
+      escrows.push_back(old_escrow);
 
-      remove( old_escrow );
+      // 移到锁外部进行
+      /*adjust_balance( old_escrow.from, old_escrow.steem_balance );
+      adjust_balance( old_escrow.from, old_escrow.sbd_balance );
+      adjust_balance( old_escrow.from, old_escrow.pending_fee );*/
+
+      remove( lock_type::none, old_escrow );
+   }
+
+   // 对escrow_index的写锁进行解锁
+   escrow_lock.unlock();
+
+   for (auto itr = escrows.begin(); itr != escrows.end(); ++itr)
+   {
+   		adjust_balance( itr->from, itr->steem_balance );
+		adjust_balance( itr->from, itr->sbd_balance );
+		adjust_balance( itr->from, itr->pending_fee );
+
    }
 }
 
 void database::process_decline_voting_rights()
 {
+	// 对decline_voting_rights_request_index和account_index加写锁
+	write_lock account_lock(get_index_mutex(account_object::type_id));
+	write_lock decline_lock(get_index_mutex(decline_voting_rights_request_object::type_id));
+
+	std::list<account_object> accounts;
    const auto& request_idx = get_index< decline_voting_rights_request_index >().indices().get< by_effective_date >();
    auto itr = request_idx.begin();
 
@@ -2259,9 +2468,11 @@ void database::process_decline_voting_rights()
       delta[0] = -account.vesting_shares.amount;
       for( int i = 0; i < STEEM_MAX_PROXY_RECURSION_DEPTH; ++i )
          delta[i+1] = -account.proxied_vsf_votes[i];
-      adjust_proxied_witness_votes( account, delta );
 
-      clear_witness_votes( account );
+      		accounts.push_back(account);
+      // 下面两个外部调用放到锁外部
+      // adjust_proxied_witness_votes( account, delta );
+      // clear_witness_votes( account );
 
       modify( account, [&]( account_object& a )
       {
@@ -2272,6 +2483,21 @@ void database::process_decline_voting_rights()
       remove( *itr );
       itr = request_idx.begin();
    }
+
+   // 对decline_voting_rights_request_index和account_index的写锁进行解锁
+   decline_lock.unlock();
+   account_lock.unlock();
+
+   for(auto itr = accounts.begin(); itr != accounts.end(); ++itr)
+	{
+		std::array<share_type, STEEM_MAX_PROXY_RECURSION_DEPTH+1> delta;
+		delta[0] = -itr->vesting_shares.amount;
+		for( int i = 0; i < STEEM_MAX_PROXY_RECURSION_DEPTH; ++i )
+			delta[i+1] = -itr->proxied_vsf_votes[i];
+
+		adjust_proxied_witness_votes( *itr, delta );
+		clear_witness_votes( *itr );
+	}
 }
 
 time_point_sec database::head_block_time()const
@@ -2498,33 +2724,33 @@ void database::init_genesis( uint64_t init_supply )
       // Create blockchain accounts
       public_key_type      init_public_key(STEEM_INIT_PUBLIC_KEY);
 
-      create< account_object >( [&]( account_object& a )
+      create< account_object >( lock_type::write_lock, [&]( account_object& a )
       {
          a.name = STEEM_MINER_ACCOUNT;
       } );
-      create< account_authority_object >( [&]( account_authority_object& auth )
+      create< account_authority_object >( lock_type::write_lock, [&]( account_authority_object& auth )
       {
          auth.account = STEEM_MINER_ACCOUNT;
          auth.owner.weight_threshold = 1;
          auth.active.weight_threshold = 1;
       });
 
-      create< account_object >( [&]( account_object& a )
+      create< account_object >( lock_type::write_lock, [&]( account_object& a )
       {
          a.name = STEEM_NULL_ACCOUNT;
       } );
-      create< account_authority_object >( [&]( account_authority_object& auth )
+      create< account_authority_object >( lock_type::write_lock, [&]( account_authority_object& auth )
       {
          auth.account = STEEM_NULL_ACCOUNT;
          auth.owner.weight_threshold = 1;
          auth.active.weight_threshold = 1;
       });
 
-      create< account_object >( [&]( account_object& a )
+      create< account_object >( lock_type::write_lock, [&]( account_object& a )
       {
          a.name = STEEM_TEMP_ACCOUNT;
       } );
-      create< account_authority_object >( [&]( account_authority_object& auth )
+      create< account_authority_object >( lock_type::write_lock, [&]( account_authority_object& auth )
       {
          auth.account = STEEM_TEMP_ACCOUNT;
          auth.owner.weight_threshold = 0;
@@ -2533,14 +2759,14 @@ void database::init_genesis( uint64_t init_supply )
 
       for( int i = 0; i < STEEM_NUM_INIT_MINERS; ++i )
       {
-         create< account_object >( [&]( account_object& a )
+         create< account_object >( lock_type::write_lock, [&]( account_object& a )
          {
             a.name = STEEM_INIT_MINER_NAME + ( i ? fc::to_string( i ) : std::string() );
             a.memo_key = init_public_key;
             a.balance  = asset( i ? 0 : init_supply, STEEM_SYMBOL );
          } );
 
-         create< account_authority_object >( [&]( account_authority_object& auth )
+         create< account_authority_object >( lock_type::write_lock, [&]( account_authority_object& auth )
          {
             auth.account = STEEM_INIT_MINER_NAME + ( i ? fc::to_string( i ) : std::string() );
             auth.owner.add_authority( init_public_key, 1 );
@@ -2549,7 +2775,7 @@ void database::init_genesis( uint64_t init_supply )
             auth.posting = auth.active;
          });
 
-         create< witness_object >( [&]( witness_object& w )
+         create< witness_object >( lock_type::write_lock, [&]( witness_object& w )
          {
             w.owner        = STEEM_INIT_MINER_NAME + ( i ? fc::to_string(i) : std::string() );
             w.signing_key  = init_public_key;
@@ -2557,7 +2783,7 @@ void database::init_genesis( uint64_t init_supply )
          } );
       }
 
-      create< dynamic_global_property_object >( [&]( dynamic_global_property_object& p )
+      create< dynamic_global_property_object >( lock_type::write_lock, [&]( dynamic_global_property_object& p )
       {
          p.current_witness = STEEM_INIT_MINER_NAME;
          p.time = STEEM_GENESIS_TIME;
@@ -2569,16 +2795,16 @@ void database::init_genesis( uint64_t init_supply )
       } );
 
       // Nothing to do
-      create< feed_history_object >( [&]( feed_history_object& o ) {});
+      create< feed_history_object >( lock_type::write_lock, [&]( feed_history_object& o ) {});
       for( int i = 0; i < 0x10000; i++ )
-         create< block_summary_object >( [&]( block_summary_object& ) {});
-      create< hardfork_property_object >( [&](hardfork_property_object& hpo )
+         create< block_summary_object >( lock_type::write_lock, [&]( block_summary_object& ) {});
+      create< hardfork_property_object >( lock_type::write_lock, [&](hardfork_property_object& hpo )
       {
          hpo.processed_hardforks.push_back( STEEM_GENESIS_TIME );
       } );
 
       // Create witness scheduler
-      create< witness_schedule_object >( [&]( witness_schedule_object& wso )
+      create< witness_schedule_object >( lock_type::write_lock, [&]( witness_schedule_object& wso )
       {
          wso.current_shuffled_witnesses[0] = STEEM_INIT_MINER_NAME;
       } );
@@ -2982,7 +3208,7 @@ try {
       std::sort( feeds.begin(), feeds.end() );
       auto median_feed = feeds[feeds.size()/2];
 
-      modify( get_feed_history(), [&]( feed_history_object& fho )
+      modify( lock_type::write_lock, get_feed_history(), [&]( feed_history_object& fho )
       {
          fho.price_history.push_back( median_feed );
          size_t steem_feed_history_window = STEEM_FEED_HISTORY_WINDOW_PRE_HF_16;
@@ -3035,19 +3261,23 @@ void database::_apply_transaction(const signed_transaction& trx)
    if( !(skip&skip_validate) )   /* issue #505 explains why this skip_flag is disabled */
       trx.validate();
 
-   auto& trx_idx = get_index<transaction_index>();
+   transaction_object* trx_obj = find<transaction_object, by_trx_id>(lock_type::read_lock, trx.id());
+   //auto& trx_idx = get_index<transaction_index>();
    const chain_id_type& chain_id = get_chain_id();
    auto trx_id = trx.id();
    // idump((trx_id)(skip&skip_transaction_dupe_check));
+   //FC_ASSERT( (skip & skip_transaction_dupe_check) ||
+   //           trx_idx.indices().get<by_trx_id>().find(trx_id) == trx_idx.indices().get<by_trx_id>().end(),
+   //           "Duplicate transaction check failed", ("trx_ix", trx_id) );
    FC_ASSERT( (skip & skip_transaction_dupe_check) ||
-              trx_idx.indices().get<by_trx_id>().find(trx_id) == trx_idx.indices().get<by_trx_id>().end(),
-              "Duplicate transaction check failed", ("trx_ix", trx_id) );
+                 trx_obj == nullptr,
+                 "Duplicate transaction check failed", ("trx_ix", trx_id) );
 
    if( !(skip & (skip_transaction_signatures | skip_authority_check) ) )
    {
-      auto get_active  = [&]( const string& name ) { return authority( get< account_authority_object, by_account >( name ).active ); };
-      auto get_owner   = [&]( const string& name ) { return authority( get< account_authority_object, by_account >( name ).owner );  };
-      auto get_posting = [&]( const string& name ) { return authority( get< account_authority_object, by_account >( name ).posting );  };
+      auto get_active  = [&]( const string& name ) { return authority( get< account_authority_object, by_account >( lock_type::read_lock, name ).active ); };
+      auto get_owner   = [&]( const string& name ) { return authority( get< account_authority_object, by_account >( lock_type::read_lock, name ).owner );  };
+      auto get_posting = [&]( const string& name ) { return authority( get< account_authority_object, by_account >( lock_type::read_lock, name ).posting );  };
 
       try
       {
@@ -3066,7 +3296,7 @@ void database::_apply_transaction(const signed_transaction& trx)
    {
       if( !(skip & skip_tapos_check) )
       {
-         const auto& tapos_block_summary = get< block_summary_object >( trx.ref_block_num );
+         const auto& tapos_block_summary = get< block_summary_object >( lock_type::read_lock, trx.ref_block_num );
          //Verify TaPoS block summary has correct ID prefix, and that this block's time is not past the expiration
          STEEM_ASSERT( trx.ref_block_prefix == tapos_block_summary.block_id._hash[1], transaction_tapos_exception,
                     "", ("trx.ref_block_prefix", trx.ref_block_prefix)
@@ -3089,7 +3319,7 @@ void database::_apply_transaction(const signed_transaction& trx)
    //Insert transaction into unique transactions database.
    if( !(skip & skip_transaction_dupe_check) )
    {
-      create<transaction_object>([&](transaction_object& transaction) {
+      create<transaction_object>(lock_type::write_lock, [&](transaction_object& transaction) {
          transaction.trx_id = trx_id;
          transaction.expiration = trx.expiration;
          fc::raw::pack_to_buffer( transaction.packed_trx, trx );
@@ -3179,7 +3409,7 @@ void database::create_block_summary(const signed_block& next_block)
    wlog("+++ update block_summary_object, old block_id: ${oid}, new block_id: ${nid}",
    		   ("oid", get<block_summary_object>(sid).block_id._hash[1]) ("nid", next_block.id()._hash[1]));
 
-   modify( get< block_summary_object >( sid ), [&](block_summary_object& p) {
+   modify( lock_type::write_lock, get< block_summary_object >( lock_type::read_lock, sid ), [&](block_summary_object& p) {
          p.block_id = next_block.id();
    });
 } FC_CAPTURE_AND_RETHROW() }
@@ -3200,7 +3430,7 @@ void database::update_global_dynamic_data( const signed_block& b )
          const auto& witness_missed = get_witness( get_scheduled_witness( i + 1 ) );
          if(  witness_missed.owner != b.witness )
          {
-            modify( witness_missed, [&]( witness_object& w )
+            modify( lock_type::write_lock, witness_missed, [&]( witness_object& w )
             {
                w.total_missed++;
                if( has_hardfork( STEEM_HARDFORK_0_14__278 ) )
@@ -3217,7 +3447,7 @@ void database::update_global_dynamic_data( const signed_block& b )
    }
 
    // dynamic global properties updating
-   modify( _dgp, [&]( dynamic_global_property_object& dgp )
+   modify( lock_type::write_lock, _dgp, [&]( dynamic_global_property_object& dgp )
    {
       // This is constant time assuming 100% participation. It is O(B) otherwise (B = Num blocks between update)
       for( uint32_t i = 0; i < missed_blocks + 1; i++ )
@@ -3245,7 +3475,7 @@ void database::update_global_dynamic_data( const signed_block& b )
 
 void database::update_virtual_supply()
 { try {
-   modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& dgp )
+   modify( lock_type::write_lock, get_dynamic_global_properties(), [&]( dynamic_global_property_object& dgp )
    {
       dgp.virtual_supply = dgp.current_supply
          + ( get_feed_history().current_median_history.is_null() ? asset( 0, STEEM_SYMBOL ) : dgp.current_sbd_supply * get_feed_history().current_median_history );
@@ -3272,7 +3502,7 @@ void database::update_signing_witness(const witness_object& signing_witness, con
    const dynamic_global_property_object& dpo = get_dynamic_global_properties();
    uint64_t new_block_aslot = dpo.current_aslot + get_slot_at_time( new_block.timestamp );
 
-   modify( signing_witness, [&]( witness_object& _wit )
+   modify( lock_type::write_lock, signing_witness, [&]( witness_object& _wit )
    {
       _wit.last_aslot = new_block_aslot;
       _wit.last_confirmed_block_num = new_block.block_num();
@@ -3289,7 +3519,7 @@ void database::update_last_irreversible_block()
     */
    if( head_block_num() < STEEM_START_MINER_VOTING_BLOCK )
    {
-      modify( dpo, [&]( dynamic_global_property_object& _dpo )
+      modify( lock_type::write_lock, dpo, [&]( dynamic_global_property_object& _dpo )
       {
          if ( head_block_num() > STEEM_MAX_WITNESSES )
             _dpo.last_irreversible_block_num = head_block_num() - STEEM_MAX_WITNESSES;
@@ -3322,7 +3552,7 @@ void database::update_last_irreversible_block()
 
       if( new_last_irreversible_block_num > dpo.last_irreversible_block_num )
       {
-         modify( dpo, [&]( dynamic_global_property_object& _dpo )
+         modify( lock_type::write_lock, dpo, [&]( dynamic_global_property_object& _dpo )
          {
             _dpo.last_irreversible_block_num = new_last_irreversible_block_num;
          } );
@@ -3362,22 +3592,39 @@ bool database::apply_order( const limit_order_object& new_order_object )
 {
    auto order_id = new_order_object.id;
 
+   // 对limit_order_index加读锁
+   read_lock limit_lock(get_index_mutex(limit_order_object::type_id));
+
    const auto& limit_price_idx = get_index<limit_order_index>().indices().get<by_price>();
 
    auto max_price = ~new_order_object.sell_price;
    auto limit_itr = limit_price_idx.lower_bound(max_price.max());
    auto limit_end = limit_price_idx.upper_bound(max_price);
 
+   std::list<limit_order_object> limit_orders;
    bool finished = false;
    while( !finished && limit_itr != limit_end )
    {
       auto old_limit_itr = limit_itr;
       ++limit_itr;
+      limit_orders.push_back(*limit_itr);
+      // 移到锁外部
       // match returns 2 when only the old order was fully filled. In this case, we keep matching; otherwise, we stop.
-      finished = ( match(new_order_object, *old_limit_itr, old_limit_itr->sell_price) & 0x1 );
+      //finished = ( match(new_order_object, *old_limit_itr, old_limit_itr->sell_price) & 0x1 );
    }
 
-   return find< limit_order_object >( order_id ) == nullptr;
+   // 对limit_order_index的读锁进行unlock
+   limit_lock.unlock();
+
+   // 对limit_orders进行match操作
+   for (auto itr = limit_orders.begin(); itr != limit_orders.end(); ++itr)
+   {
+   		// match returns 2 when only the old order was fully filled. In this case, we keep matching; otherwise, we stop.
+   	   finished = ( match(new_order_object, *itr, itr->sell_price) & 0x1 );
+
+   }
+
+   return find< limit_order_object >( lock_type::read_lock, order_id ) == nullptr;
 }
 
 int database::match( const limit_order_object& new_order, const limit_order_object& old_order, const price& match_price )
@@ -3472,11 +3719,14 @@ int database::match( const limit_order_object& new_order, const limit_order_obje
 
 void database::adjust_liquidity_reward( const account_object& owner, const asset& volume, bool is_sdb )
 {
-   const auto& ridx = get_index< liquidity_reward_balance_index >().indices().get< by_owner >();
+	// 对liquidity_reward_balance_index加写锁
+	write_lock liquidity_lock(get_index_mutex(liquidity_reward_balance_object::type_id));
+
+   const auto& ridx = get_index< liquidity_reward_balance_index >(lock_type::none).indices().get< by_owner >();
    auto itr = ridx.find( owner.id );
    if( itr != ridx.end() )
    {
-      modify<liquidity_reward_balance_object>( *itr, [&]( liquidity_reward_balance_object& r )
+      modify<liquidity_reward_balance_object>( lock_type::none, *itr, [&]( liquidity_reward_balance_object& r )
       {
          if( head_block_time() - r.last_update >= STEEM_LIQUIDITY_TIMEOUT_SEC )
          {
@@ -3496,7 +3746,7 @@ void database::adjust_liquidity_reward( const account_object& owner, const asset
    }
    else
    {
-      create<liquidity_reward_balance_object>( [&](liquidity_reward_balance_object& r )
+      create<liquidity_reward_balance_object>( lock_type::none, [&](liquidity_reward_balance_object& r )
       {
          r.owner = owner.id;
          if( is_sdb )
@@ -3508,6 +3758,9 @@ void database::adjust_liquidity_reward( const account_object& owner, const asset
          r.last_update = head_block_time();
       } );
    }
+
+   // 对liquidity_reward_balance_index的写锁进行解锁
+   liquidity_lock.unlock();
 }
 
 
@@ -3526,7 +3779,7 @@ bool database::fill_order( const limit_order_object& order, const asset& pays, c
 
       if( pays == order.amount_for_sale() )
       {
-         remove( order );
+         remove( lock_type::write_lock, order );
          return true;
       }
       else
@@ -3539,7 +3792,7 @@ bool database::fill_order( const limit_order_object& order, const asset& pays, c
               ("order", order)("pays", pays)("receives", receives) );
          }
 
-         modify( order, [&]( limit_order_object& b )
+         modify( lock_type::write_lock, order, [&]( limit_order_object& b )
          {
             b.for_sale -= pays.amount;
          } );
@@ -3563,7 +3816,7 @@ bool database::fill_order( const limit_order_object& order, const asset& pays, c
 void database::cancel_order( const limit_order_object& order )
 {
    adjust_balance( order.seller, order.amount_for_sale() );
-   remove(order);
+   remove(lock_type::write_lock, order);
 }
 
 
@@ -3571,40 +3824,80 @@ void database::clear_expired_transactions()
 {
    //Look for expired transactions in the deduplication list, and remove them.
    //Transactions must have expired by at least two forking windows in order to be removed.
+	// 对transaction_index加写锁
+	write_lock trx_lock(get_index_mutex(transaction_object::type_id));
+
    auto& transaction_idx = get_index< transaction_index >();
    const auto& dedupe_index = transaction_idx.indices().get< by_expiration >();
    while( ( !dedupe_index.empty() ) && ( head_block_time() > dedupe_index.begin()->expiration ) )
-      remove( *dedupe_index.begin() );
+      remove( lock_type::none, *dedupe_index.begin() );
 }
 
 void database::clear_expired_orders()
 {
    auto now = head_block_time();
+
+   std::list<limit_order_object> limit_orders;
+
+   //对limit_order_index加读锁
+   read_lock limit_lock(get_index_mutex(limit_order_object::type_id));
+
    const auto& orders_by_exp = get_index<limit_order_index>().indices().get<by_expiration>();
    auto itr = orders_by_exp.begin();
    while( itr != orders_by_exp.end() && itr->expiration < now )
    {
-      cancel_order( *itr );
+   		limit_orders.push_back(*itr);
+   		//下面的逻辑移到锁外面进行
+      //cancel_order( *itr );
       itr = orders_by_exp.begin();
+   }
+
+   // 对limit_order_index的读锁进行解锁
+   limit_lock.unlock();
+
+   for (auto itr = limit_orders.begin(); itr != limit_orders.end(); ++itr)
+   {
+   		cancel_order( *itr );
    }
 }
 
 void database::clear_expired_delegations()
 {
    auto now = head_block_time();
+
+   // 对vesting_delegation_expiration_index加写锁
+   write_lock vesting_lock(get_index_mutex(vesting_delegation_expiration_object::type_id));
+
+   std::list<return_vesting_delegation_operation> ops;
    const auto& delegations_by_exp = get_index< vesting_delegation_expiration_index, by_expiration >();
    auto itr = delegations_by_exp.begin();
    while( itr != delegations_by_exp.end() && itr->expiration < now )
    {
-      modify( get_account( itr->delegator ), [&]( account_object& a )
+   		ops.push_back(return_vesting_delegation_operation( itr->delegator, itr->vesting_shares ));
+   		// 下面的逻辑移到锁外面
+      /*modify( get_account( itr->delegator ), [&]( account_object& a )
       {
          a.delegated_vesting_shares -= itr->vesting_shares;
       });
 
       push_virtual_operation( return_vesting_delegation_operation( itr->delegator, itr->vesting_shares ) );
-
+		*/
       remove( *itr );
       itr = delegations_by_exp.begin();
+   }
+
+   // 对vesting_delegation_expiration_index的写锁进行解锁
+   vesting_lock.unlock();
+
+   for (auto itr = ops.begin(); itr != ops.end(); ++itr)
+   {
+   		modify( lock_type::write_lock, get_account( itr->account
+   				), [&]( account_object& a )
+   	      {
+   	         a.delegated_vesting_shares -= itr->vesting_shares;
+   	      });
+
+   	      push_virtual_operation( return_vesting_delegation_operation( itr->account, itr->vesting_shares ) );
    }
 }
 #ifdef STEEM_ENABLE_SMT
@@ -3612,7 +3905,7 @@ template< typename smt_balance_object_type >
 void database::adjust_smt_balance( const account_name_type& name, const asset& delta, bool check_account )
 {
    const smt_balance_object_type* bo =
-      find< smt_balance_object_type, by_owner_symbol >( boost::make_tuple( name, delta.symbol ) );
+      find< smt_balance_object_type, by_owner_symbol >( lock_type::read_lock, boost::make_tuple( name, delta.symbol ) );
    // Note that SMT related code, being post-20-hf needs no hf-guard to do balance checks.
    if( bo == nullptr )
    {
@@ -3625,7 +3918,7 @@ void database::adjust_smt_balance( const account_name_type& name, const asset& d
       if( check_account )
          get_account( name );
 
-      create< smt_balance_object_type >( [&]( smt_balance_object_type& smt_balance )
+      create< smt_balance_object_type >( lock_type::write_lock, [&]( smt_balance_object_type& smt_balance )
       {
          smt_balance.owner = name;
          smt_balance.balance = delta;
@@ -3639,11 +3932,11 @@ void database::adjust_smt_balance( const account_name_type& name, const asset& d
       // Zero balance is the same as non object balance at all.
       if( result.amount.value == 0 )
       {
-         remove( *bo );
+         remove( lock_type::write_lock, *bo );
       }
       else
       {
-         modify( *bo, [&]( smt_balance_object_type& smt_balance )
+         modify( lock_type::write_lock, *bo, [&]( smt_balance_object_type& smt_balance )
          {
             smt_balance.balance = result;
          } );
@@ -3654,7 +3947,9 @@ void database::adjust_smt_balance( const account_name_type& name, const asset& d
 
 void database::modify_balance( const account_object& a, const asset& delta, bool check_balance )
 {
-   modify( a, [&]( account_object& acnt )
+	interest_operation op;
+
+   modify( lock_type::write_lock, a, [&]( account_object& acnt )
    {
       switch( delta.symbol.asset_num )
       {
@@ -3683,7 +3978,8 @@ void database::modify_balance( const account_object& a, const asset& delta, bool
                   acnt.sbd_last_interest_payment = head_block_time();
 
                   if(interest > 0)
-                     push_virtual_operation( interest_operation( a.name, interest_paid ) );
+                  		op = interest_operation( a.name, interest_paid );
+                     // push_virtual_operation( interest_operation( a.name, interest_paid ) );
 
                   modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& props)
                   {
@@ -3702,11 +3998,16 @@ void database::modify_balance( const account_object& a, const asset& delta, bool
             FC_ASSERT( false, "invalid symbol" );
       }
    } );
+
+   if (op.interest > 0)
+   {
+   		push_virtual_operation(op);
+   }
 }
 
 void database::modify_reward_balance( const account_object& a, const asset& delta, bool check_balance )
 {
-   modify( a, [&]( account_object& acnt )
+   modify( lock_type::write_lock, a, [&]( account_object& acnt )
    {
       switch( delta.symbol.asset_num )
       {
@@ -3767,7 +4068,8 @@ void database::adjust_savings_balance( const account_object& a, const asset& del
 {
    bool check_balance = has_hardfork( STEEM_HARDFORK_0_20__1811 );
 
-   modify( a, [&]( account_object& acnt )
+   interest_operation op;
+   modify( lock_type::write_lock, a, [&]( account_object& acnt )
    {
       switch( delta.symbol.asset_num )
       {
@@ -3796,9 +4098,10 @@ void database::adjust_savings_balance( const account_object& a, const asset& del
                   acnt.savings_sbd_last_interest_payment = head_block_time();
 
                   if(interest > 0)
-                     push_virtual_operation( interest_operation( a.name, interest_paid ) );
+                  		op = interest_operation( a.name, interest_paid );
+                     //push_virtual_operation( interest_operation( a.name, interest_paid ) );
 
-                  modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& props)
+                  modify( lock_type::write_lock, get_dynamic_global_properties(), [&]( dynamic_global_property_object& props)
                   {
                      props.current_sbd_supply += interest_paid;
                      props.virtual_supply += interest_paid * get_feed_history().current_median_history;
@@ -3815,6 +4118,11 @@ void database::adjust_savings_balance( const account_object& a, const asset& del
             FC_ASSERT( !"invalid symbol" );
       }
    } );
+
+   if (op.interest > 0)
+   {
+   		push_virtual_operation(op);
+   }
 }
 
 
@@ -3858,10 +4166,10 @@ void database::adjust_supply( const asset& delta, bool adjust_vesting )
 #ifdef STEEM_ENABLE_SMT
    if( delta.symbol.space() == asset_symbol_type::smt_nai_space )
    {
-      const auto& smt = get< smt_token_object, by_symbol >( delta.symbol );
+      const auto& smt = get< smt_token_object, by_symbol >( lock_type::read_lock, delta.symbol );
       auto smt_new_supply = smt.current_supply + delta.amount;
       FC_ASSERT( smt_new_supply >= 0 );
-      modify( smt, [smt_new_supply]( smt_token_object& smt )
+      modify( lock_type::write_lock, smt, [smt_new_supply]( smt_token_object& smt )
       {
          smt.current_supply = smt_new_supply;
       });
@@ -3875,7 +4183,7 @@ void database::adjust_supply( const asset& delta, bool adjust_vesting )
    if( props.head_block_number < STEEM_BLOCKS_PER_DAY*7 )
       adjust_vesting = false;
 
-   modify( props, [&]( dynamic_global_property_object& props )
+   modify( lock_type::write_lock, props, [&]( dynamic_global_property_object& props )
    {
       switch( delta.symbol.asset_num )
       {
@@ -3919,7 +4227,7 @@ asset database::get_balance( const account_object& a, asset_symbol_type symbol )
 #ifdef STEEM_ENABLE_SMT
          FC_ASSERT( symbol.space() == asset_symbol_type::smt_nai_space, "invalid symbol" );
          const account_regular_balance_object* arbo =
-            find< account_regular_balance_object, by_owner_symbol >( boost::make_tuple(a.name, symbol) );
+            find< account_regular_balance_object, by_owner_symbol >( lock_type::read_lock, boost::make_tuple(a.name, symbol) );
          if( arbo == nullptr )
          {
             return asset(0, symbol);
@@ -4073,7 +4381,7 @@ void database::set_hardfork( uint32_t hardfork, bool apply_now )
          _hardfork_times[i] = head_block_time();
       else
       {
-         modify( hardforks, [&]( hardfork_property_object& hpo )
+         modify( lock_type::write_lock, hardforks, [&]( hardfork_property_object& hpo )
          {
             hpo.next_hardfork = _hardfork_versions[i];
             hpo.next_hardfork_time = head_block_time();
@@ -4148,7 +4456,7 @@ void database::apply_hardfork( uint32_t hardfork )
 
                update_owner_authority( *account, authority( 1, public_key_type( "STM7sw22HqsXbz7D2CmJfmMwt9rimtk518dRzsR1f8Cgw52dQR1pR" ), 1 ) );
 
-               modify( get< account_authority_object, by_account >( account->name ), [&]( account_authority_object& auth )
+               modify( lock_type::write_lock, get< account_authority_object, by_account >( lock_type::read_lock, account->name ), [&]( account_authority_object& auth )
                {
                   auth.active  = authority( 1, public_key_type( "STM7sw22HqsXbz7D2CmJfmMwt9rimtk518dRzsR1f8Cgw52dQR1pR" ), 1 );
                   auth.posting = authority( 1, public_key_type( "STM7sw22HqsXbz7D2CmJfmMwt9rimtk518dRzsR1f8Cgw52dQR1pR" ), 1 );
@@ -4163,6 +4471,8 @@ void database::apply_hardfork( uint32_t hardfork )
          break;
       case STEEM_HARDFORK_0_12:
          {
+         		// not need code fishermen
+         	/*
             const auto& comment_idx = get_index< comment_index >().indices();
 
             for( auto itr = comment_idx.begin(); itr != comment_idx.end(); ++itr )
@@ -4207,7 +4517,7 @@ void database::apply_hardfork( uint32_t hardfork )
             {
                auth.posting = authority();
                auth.posting.weight_threshold = 1;
-            });
+            });*/
          }
          break;
       case STEEM_HARDFORK_0_13:
@@ -4218,7 +4528,7 @@ void database::apply_hardfork( uint32_t hardfork )
          break;
       case STEEM_HARDFORK_0_16:
          {
-            modify( get_feed_history(), [&]( feed_history_object& fho )
+            modify( lock_type::write_lock, get_feed_history(), [&]( feed_history_object& fho )
             {
                while( fho.price_history.size() > STEEM_FEED_HISTORY_WINDOW )
                   fho.price_history.pop_front();
@@ -4234,7 +4544,7 @@ void database::apply_hardfork( uint32_t hardfork )
                STEEM_MAX_VOTED_WITNESSES_HF17 + STEEM_MAX_MINER_WITNESSES_HF17 + STEEM_MAX_RUNNER_WITNESSES_HF17 == STEEM_MAX_WITNESSES,
                "HF17 witness counts must add up to STEEM_MAX_WITNESSES" );
 
-            modify( get_witness_schedule_object(), [&]( witness_schedule_object& wso )
+            modify( lock_type::write_lock, get_witness_schedule_object(), [&]( witness_schedule_object& wso )
             {
                wso.max_voted_witnesses = STEEM_MAX_VOTED_WITNESSES_HF17;
                wso.max_miner_witnesses = STEEM_MAX_MINER_WITNESSES_HF17;
@@ -4243,7 +4553,7 @@ void database::apply_hardfork( uint32_t hardfork )
 
             const auto& gpo = get_dynamic_global_properties();
 
-            auto post_rf = create< reward_fund_object >( [&]( reward_fund_object& rfo )
+            auto post_rf = create< reward_fund_object >( lock_type::write_lock, [&]( reward_fund_object& rfo )
             {
                rfo.name = STEEM_POST_REWARD_FUND_NAME;
                rfo.last_update = head_block_time();
@@ -4262,7 +4572,7 @@ void database::apply_hardfork( uint32_t hardfork )
             // The IDs must be assigned this way. The assertion is a dummy check to ensure this happens.
             FC_ASSERT( post_rf.id._id == 0 );
 
-            modify( gpo, [&]( dynamic_global_property_object& g )
+            modify( lock_type::write_lock, gpo, [&]( dynamic_global_property_object& g )
             {
                g.total_reward_fund_steem = asset( 0, STEEM_SYMBOL );
                g.total_reward_shares2 = 0;
@@ -4280,6 +4590,8 @@ void database::apply_hardfork( uint32_t hardfork )
             * the min cashout time for each child in the discussion. Then iterate over the children and set
             * their cashout time in a similar way, grabbing the root post as their inherent cashout time.
             */
+            // not need code fishermen
+            /*
             const auto& comment_idx = get_index< comment_index, by_cashout_time >();
             const auto& by_root_idx = get_index< comment_index, by_root >();
             vector< const comment_object* > root_posts;
@@ -4311,19 +4623,19 @@ void database::apply_hardfork( uint32_t hardfork )
                {
                   c.cashout_time = std::max( calculate_discussion_payout_time( c ), c.created + STEEM_CASHOUT_WINDOW_SECONDS );
                });
-            }
+            }*/
          }
          break;
       case STEEM_HARDFORK_0_18:
          break;
       case STEEM_HARDFORK_0_19:
          {
-            modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
+            modify( lock_type::write_lock, get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
             {
                gpo.vote_power_reserve_rate = STEEM_REDUCED_VOTE_POWER_RATE;
             });
 
-            modify( get< reward_fund_object, by_name >( STEEM_POST_REWARD_FUND_NAME ), [&]( reward_fund_object &rfo )
+            modify( lock_type::write_lock, get< reward_fund_object, by_name >( lock_type::read_lock, STEEM_POST_REWARD_FUND_NAME ), [&]( reward_fund_object &rfo )
             {
 #ifndef IS_TEST_NET
                rfo.recent_claims = STEEM_HF_19_RECENT_CLAIMS;
@@ -4331,6 +4643,9 @@ void database::apply_hardfork( uint32_t hardfork )
                rfo.author_reward_curve = curve_id::linear;
                rfo.curation_reward_curve = curve_id::square_root;
             });
+
+            // 对vesting_delegation_index 加写锁
+            write_lock vesting_lock(get_index_mutex(vesting_delegation_object::type_id));
 
             /* Remove all 0 delegation objects */
             vector< const vesting_delegation_object* > to_remove;
@@ -4349,6 +4664,9 @@ void database::apply_hardfork( uint32_t hardfork )
             {
                remove( *delegation_ptr );
             }
+
+            // 加上，避免后面又追加代码
+            vesting_lock.unlock();
          }
          break;
 #ifdef IS_TEST_NET
@@ -4361,7 +4679,7 @@ void database::apply_hardfork( uint32_t hardfork )
          break;
    }
 
-   modify( get_hardfork_property_object(), [&]( hardfork_property_object& hfp )
+   modify( lock_type::write_lock, get_hardfork_property_object(), [&]( hardfork_property_object& hfp )
    {
       FC_ASSERT( hardfork == hfp.last_hardfork + 1, "Hardfork being applied out of order", ("hardfork",hardfork)("hfp.last_hardfork",hfp.last_hardfork) );
       FC_ASSERT( hfp.processed_hardforks.size() == hardfork, "Hardfork being applied out of order" );
@@ -4375,12 +4693,18 @@ void database::apply_hardfork( uint32_t hardfork )
 }
 
 void database::retally_liquidity_weight() {
+	//对liquidity_reward_balance_index加写锁
+	write_lock liquidity_lock(get_index_mutex(liquidity_reward_balance_object::type_id));
+
    const auto& ridx = get_index< liquidity_reward_balance_index >().indices().get< by_owner >();
    for( const auto& i : ridx ) {
       modify( i, []( liquidity_reward_balance_object& o ){
          o.update_weight(true/*HAS HARDFORK10 if this method is called*/);
       });
    }
+
+   // 解锁，预防追加代码
+   liquidity_lock.unlock;
 }
 
 /**
@@ -4390,7 +4714,6 @@ void database::validate_invariants()const
 {
    try
    {
-      const auto& account_idx = get_index<account_index>().indices().get<by_name>();
       asset total_supply = asset( 0, STEEM_SYMBOL );
       asset total_sbd = asset( 0, SBD_SYMBOL );
       asset total_vesting = asset( 0, VESTS_SYMBOL );
@@ -4400,10 +4723,19 @@ void database::validate_invariants()const
       auto gpo = get_dynamic_global_properties();
 
       /// verify no witness has too many votes
-      const auto& witness_idx = get_index< witness_index >().indices();
+      // 对witness_idx加读锁
+      read_lock witness_lock(get_index_mutex(witness_object::type_id));
+
+      const auto& witness_idx = get_index< witness_index >(lock_type::none).indices();
       for( auto itr = witness_idx.begin(); itr != witness_idx.end(); ++itr )
          FC_ASSERT( itr->votes <= gpo.total_vesting_shares.amount, "", ("itr",*itr) );
 
+      witness_lock.unlock();
+
+      //对account_index加读锁
+      read_lock account_lock(get_index_mutex(account_object::type_id));
+
+      const auto& account_idx = get_index<account_index>(lock_type::none).indices().get<by_name>();
       for( auto itr = account_idx.begin(); itr != account_idx.end(); ++itr )
       {
          total_supply += itr->balance;
@@ -4422,7 +4754,12 @@ void database::validate_invariants()const
                                       itr->vesting_shares.amount ) );
       }
 
-      const auto& convert_request_idx = get_index< convert_request_index >().indices();
+      account_lock.unlock();
+
+      //对convert_request_index加读锁
+      read_lock convert_lock(convert_request_object::type_id);
+
+      const auto& convert_request_idx = get_index< convert_request_index >(lock_type::none).indices();
 
       for( auto itr = convert_request_idx.begin(); itr != convert_request_idx.end(); ++itr )
       {
@@ -4434,7 +4771,12 @@ void database::validate_invariants()const
             FC_ASSERT( false, "Encountered illegal symbol in convert_request_object" );
       }
 
-      const auto& limit_order_idx = get_index< limit_order_index >().indices();
+      convert_lock.unlock();
+
+      // 对limit_order_index加读锁
+      read_lock limit_order_lock(limit_order_object::type_id);
+
+      const auto& limit_order_idx = get_index< limit_order_index >(lock_type::none).indices();
 
       for( auto itr = limit_order_idx.begin(); itr != limit_order_idx.end(); ++itr )
       {
@@ -4448,7 +4790,12 @@ void database::validate_invariants()const
          }
       }
 
-      const auto& escrow_idx = get_index< escrow_index >().indices().get< by_id >();
+      limit_order_lock.unlock();
+
+      // 对escrow_index加读锁
+      read_lock escrow_lock(get_index_mutex(escrow_object::type_id));
+
+      const auto& escrow_idx = get_index< escrow_index >(lock_type::none).indices().get< by_id >();
 
       for( auto itr = escrow_idx.begin(); itr != escrow_idx.end(); ++itr )
       {
@@ -4463,7 +4810,12 @@ void database::validate_invariants()const
             FC_ASSERT( false, "found escrow pending fee that is not SBD or STEEM" );
       }
 
-      const auto& savings_withdraw_idx = get_index< savings_withdraw_index >().indices().get< by_id >();
+      escrow_lock.unlock();
+
+      //对savings_withdraw_index加读锁
+      read_lock saving_lock(get_index_mutex(savings_withdraw_object::type_id));
+
+      const auto& savings_withdraw_idx = get_index< savings_withdraw_index >(lock_type::none).indices().get< by_id >();
 
       for( auto itr = savings_withdraw_idx.begin(); itr != savings_withdraw_idx.end(); ++itr )
       {
@@ -4475,12 +4827,19 @@ void database::validate_invariants()const
             FC_ASSERT( false, "found savings withdraw that is not SBD or STEEM" );
       }
 
-      const auto& reward_idx = get_index< reward_fund_index, by_id >();
+      saving_lock.unlock();
+
+      // 对reward_fund_index加读锁
+      read_lock reward_lock(get_index_mutex(reward_fund_object::type_id));
+
+      const auto& reward_idx = get_index< reward_fund_index, by_id >(lock_type::none);
 
       for( auto itr = reward_idx.begin(); itr != reward_idx.end(); ++itr )
       {
          total_supply += itr->reward_balance;
       }
+
+      reward_lock.unlock();
 
       total_supply += gpo.total_vesting_fund_steem + gpo.total_reward_fund_steem + gpo.pending_rewarded_vesting_steem;
 
@@ -4531,17 +4890,19 @@ void database::validate_smt_invariants()const
       TTotalSupplyMap theMap;
 
       // - Balances
-      const auto& balance_idx = get_index< account_regular_balance_index, by_id >();
+      const auto& balance_idx = get_index< account_regular_balance_index, by_id >(lock_type::read_lock);
       add_from_balance_index( balance_idx, theMap );
 
       // - Reward balances
-      const auto& rewards_balance_idx = get_index< account_rewards_balance_index, by_id >();
+      const auto& rewards_balance_idx = get_index< account_rewards_balance_index, by_id >(lock_type::read_lock);
       add_from_balance_index( rewards_balance_idx, theMap );
 
       // - Total vesting
 #pragma message( "TODO: Add SMT vesting support here once it is implemented." )
 
       // - Market orders
+      read_lock limit_lock(get_index_mutex(limit_order_object::type_id));
+
       const auto& limit_order_idx = get_index< limit_order_index >().indices();
       for( auto itr = limit_order_idx.begin(); itr != limit_order_idx.end(); ++itr )
       {
@@ -4553,6 +4914,7 @@ void database::validate_smt_invariants()const
                insertInfo.first->second += a;
          }
       }
+      limit_lock.unlock();
 
       // - Reward funds
 #pragma message( "TODO: Add reward_fund_object iteration here once they support SMTs." )
@@ -4560,6 +4922,8 @@ void database::validate_smt_invariants()const
       // - Escrow & savings - no support of SMT is expected.
 
       // Do the verification of total balances.
+      read_lock smt_lock(get_index_mutex(smt_token_object::type_id));
+
       auto itr = get_index< smt_token_index, by_id >().begin();
       auto end = get_index< smt_token_index, by_id >().end();
       for( ; itr != end; ++itr )
@@ -4570,6 +4934,7 @@ void database::validate_smt_invariants()const
          FC_ASSERT( asset(smt.current_supply, smt.liquid_symbol) == total_liquid_supply,
                     "", ("smt current_supply",smt.current_supply)("total_liquid_supply",total_liquid_supply) );
       }
+      smt_lock.unlock();
    }
    FC_CAPTURE_LOG_AND_RETHROW( (head_block_num()) );
 }
@@ -4579,16 +4944,19 @@ void database::perform_vesting_share_split( uint32_t magnitude )
 {
    try
    {
-      modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& d )
+      modify( lock_type::write_lock, get_dynamic_global_properties(), [&]( dynamic_global_property_object& d )
       {
          d.total_vesting_shares.amount *= magnitude;
          d.total_reward_shares2 = 0;
       } );
 
+      	// 对account_index加写锁
+      write_lock account_lock(account_object::type_id);
+
       // Need to update all VESTS in accounts and the total VESTS in the dgpo
       for( const auto& account : get_index<account_index>().indices() )
       {
-         modify( account, [&]( account_object& a )
+         modify( lock_type::none, lock_type::none, account, [&]( account_object& a )
          {
             a.vesting_shares.amount *= magnitude;
             a.withdrawn             *= magnitude;
@@ -4602,16 +4970,22 @@ void database::perform_vesting_share_split( uint32_t magnitude )
          } );
       }
 
-      const auto& comments = get_index< comment_index >().indices();
+      account_lock.unlock();
+
+      //对comment_index加写锁
+      write_lock comment_lock(get_index_mutex(comment_object::type_id));
+
+      const auto& comments = get_index< comment_index >(lock_type::none).indices();
       for( const auto& comment : comments )
       {
-         modify( comment, [&]( comment_object& c )
+         modify( lock_type::none, comment, [&]( comment_object& c )
          {
             c.net_rshares       *= magnitude;
             c.abs_rshares       *= magnitude;
             c.vote_rshares      *= magnitude;
          } );
       }
+      comment_lock.unlock();
 
       for( const auto& c : comments )
       {
@@ -4625,44 +4999,44 @@ void database::perform_vesting_share_split( uint32_t magnitude )
 
 void database::retally_comment_children()
 {
-   const auto& cidx = get_index< comment_index >().indices();
-
-   // Clear children counts
-   for( auto itr = cidx.begin(); itr != cidx.end(); ++itr )
-   {
-      modify( *itr, [&]( comment_object& c )
-      {
-         c.children = 0;
-      });
-   }
-
-   for( auto itr = cidx.begin(); itr != cidx.end(); ++itr )
-   {
-      if( itr->parent_author != STEEM_ROOT_POST_PARENT )
-      {
-// Low memory nodes only need immediate child count, full nodes track total children
-#ifdef IS_LOW_MEM
-         modify( get_comment( itr->parent_author, itr->parent_permlink ), [&]( comment_object& c )
-         {
-            c.children++;
-         });
-#else
-         const comment_object* parent = &get_comment( itr->parent_author, itr->parent_permlink );
-         while( parent )
-         {
-            modify( *parent, [&]( comment_object& c )
-            {
-               c.children++;
-            });
-
-            if( parent->parent_author != STEEM_ROOT_POST_PARENT )
-               parent = &get_comment( parent->parent_author, parent->parent_permlink );
-            else
-               parent = nullptr;
-         }
-#endif
-      }
-   }
+//   const auto& cidx = get_index< comment_index >().indices();
+//
+//   // Clear children counts
+//   for( auto itr = cidx.begin(); itr != cidx.end(); ++itr )
+//   {
+//      modify( *itr, [&]( comment_object& c )
+//      {
+//         c.children = 0;
+//      });
+//   }
+//
+//   for( auto itr = cidx.begin(); itr != cidx.end(); ++itr )
+//   {
+//      if( itr->parent_author != STEEM_ROOT_POST_PARENT )
+//      {
+//// Low memory nodes only need immediate child count, full nodes track total children
+//#ifdef IS_LOW_MEM
+//         modify( get_comment( itr->parent_author, itr->parent_permlink ), [&]( comment_object& c )
+//         {
+//            c.children++;
+//         });
+//#else
+//         const comment_object* parent = &get_comment( itr->parent_author, itr->parent_permlink );
+//         while( parent )
+//         {
+//            modify( *parent, [&]( comment_object& c )
+//            {
+//               c.children++;
+//            });
+//
+//            if( parent->parent_author != STEEM_ROOT_POST_PARENT )
+//               parent = &get_comment( parent->parent_author, parent->parent_permlink );
+//            else
+//               parent = nullptr;
+//         }
+//#endif
+//      }
+//   }
 }
 
 /**
@@ -4672,97 +5046,97 @@ void database::retally_comment_children()
  */
 void database::retally_witness_votes()
 {
-	/* witness_index 批量写加锁 */
-	write_lock witness_lock(get_index_mutex(witness_object::type_id));
-
-   const auto& witness_idx = get_index< witness_index >(lock_type::none).indices();
-
-   // Clear all witness votes
-   for( auto itr = witness_idx.begin(); itr != witness_idx.end(); ++itr )
-   {
-      modify(lock_type::none, *itr, [&]( witness_object& w )
-      {
-         w.votes = 0;
-         w.virtual_position = 0;
-      } );
-   }
-
-   // witness_index批量写完毕，解锁
-   witness_lock.unlock();
-
-   // account_index批量读加锁
-   read_lock account_lock(get_index_mutex(account_object::type_id));
-
-   std::list accounts;
-   const auto& account_idx = get_index< account_index >(lock_type::none).indices();
-   // Apply all existing votes by account
-   for( auto itr = account_idx.begin(); itr != account_idx.end(); ++itr )
-   {
-      if( itr->proxy != STEEM_PROXY_TO_SELF_ACCOUNT ) continue;
-      accounts.push_back(itr->name);
-   }
-
-   // account_index 批量读完毕，解锁
-   account_lock.unlock();
-
-   // 批量获取 witness_vote_index 加读锁
-   read_lock witness_vote_lock(get_index_mutex(witness_vote_object::type_id));
-
-   std::list witnesses;
-   for( auto itr = accounts.begin(); itr != accounts.end(); ++itr)
-   {
-   		account_name_type name = *itr;
-   		const auto& vidx = get_index<witness_vote_index>(lock_type::none).indices().get<by_account_witness>();
-		auto wit_itr = vidx.lower_bound( boost::make_tuple( name, account_name_type() ) );
-		while( wit_itr != vidx.end() && wit_itr->account == name )
-		{
-			witnesses.push_back(wit_itr->witness);
-			++wit_itr;
-		}
-   }
-
-   // 批量获取witness_vote_index中的witness 完毕，witness_vote_index解锁
-   witness_vote_lock.unlock();
-
-   // 批量修改witness_index，加写锁
-   write_lock witness_lock(get_index_mutex(witness_object::type_id));
-
-   for (auto itr = witnesses.begin(); itr != witnesses.end(); ++itr)
-   {
-   		adjust_witness_vote( lock_type::none, get< witness_object, by_name >(lock_type::none, wit_itr->witness), a.witness_vote_weight() );
-   }
-
-   // 养成好习惯，不用锁时，立即解锁。（原因：如果靠自动析构解锁，后面再追加逻辑时，可能会没有提前先解锁
-   witness_lock.unlock();
+//	/* witness_index 批量写加锁 */
+//	write_lock witness_lock(get_index_mutex(witness_object::type_id));
+//
+//   const auto& witness_idx = get_index< witness_index >(lock_type::none).indices();
+//
+//   // Clear all witness votes
+//   for( auto itr = witness_idx.begin(); itr != witness_idx.end(); ++itr )
+//   {
+//      modify(lock_type::none, *itr, [&]( witness_object& w )
+//      {
+//         w.votes = 0;
+//         w.virtual_position = 0;
+//      } );
+//   }
+//
+//   // witness_index批量写完毕，解锁
+//   witness_lock.unlock();
+//
+//   // account_index批量读加锁
+//   read_lock account_lock(get_index_mutex(account_object::type_id));
+//
+//   std::list accounts;
+//   const auto& account_idx = get_index< account_index >(lock_type::none).indices();
+//   // Apply all existing votes by account
+//   for( auto itr = account_idx.begin(); itr != account_idx.end(); ++itr )
+//   {
+//      if( itr->proxy != STEEM_PROXY_TO_SELF_ACCOUNT ) continue;
+//      accounts.push_back(itr->name);
+//   }
+//
+//   // account_index 批量读完毕，解锁
+//   account_lock.unlock();
+//
+//   // 批量获取 witness_vote_index 加读锁
+//   read_lock witness_vote_lock(get_index_mutex(witness_vote_object::type_id));
+//
+//   std::list witnesses;
+//   for( auto itr = accounts.begin(); itr != accounts.end(); ++itr)
+//   {
+//   		account_name_type name = *itr;
+//   		const auto& vidx = get_index<witness_vote_index>(lock_type::none).indices().get<by_account_witness>();
+//		auto wit_itr = vidx.lower_bound( boost::make_tuple( name, account_name_type() ) );
+//		while( wit_itr != vidx.end() && wit_itr->account == name )
+//		{
+//			witnesses.push_back(wit_itr->witness);
+//			++wit_itr;
+//		}
+//   }
+//
+//   // 批量获取witness_vote_index中的witness 完毕，witness_vote_index解锁
+//   witness_vote_lock.unlock();
+//
+//   // 批量修改witness_index，加写锁
+//   write_lock witness_lock(get_index_mutex(witness_object::type_id));
+//
+//   for (auto itr = witnesses.begin(); itr != witnesses.end(); ++itr)
+//   {
+//   		adjust_witness_vote( lock_type::none, get< witness_object, by_name >(lock_type::none, wit_itr->witness), a.witness_vote_weight() );
+//   }
+//
+//   // 养成好习惯，不用锁时，立即解锁。（原因：如果靠自动析构解锁，后面再追加逻辑时，可能会没有提前先解锁
+//   witness_lock.unlock();
 }
 
 void database::retally_witness_vote_counts( bool force )
 {
-   const auto& account_idx = get_index< account_index >().indices();
-
-   // Check all existing votes by account
-   for( auto itr = account_idx.begin(); itr != account_idx.end(); ++itr )
-   {
-      const auto& a = *itr;
-      uint16_t witnesses_voted_for = 0;
-      if( force || (a.proxy != STEEM_PROXY_TO_SELF_ACCOUNT  ) )
-      {
-        const auto& vidx = get_index< witness_vote_index >().indices().get< by_account_witness >();
-        auto wit_itr = vidx.lower_bound( boost::make_tuple( a.name, account_name_type() ) );
-        while( wit_itr != vidx.end() && wit_itr->account == a.name )
-        {
-           ++witnesses_voted_for;
-           ++wit_itr;
-        }
-      }
-      if( a.witnesses_voted_for != witnesses_voted_for )
-      {
-         modify( a, [&]( account_object& account )
-         {
-            account.witnesses_voted_for = witnesses_voted_for;
-         } );
-      }
-   }
+//   const auto& account_idx = get_index< account_index >().indices();
+//
+//   // Check all existing votes by account
+//   for( auto itr = account_idx.begin(); itr != account_idx.end(); ++itr )
+//   {
+//      const auto& a = *itr;
+//      uint16_t witnesses_voted_for = 0;
+//      if( force || (a.proxy != STEEM_PROXY_TO_SELF_ACCOUNT  ) )
+//      {
+//        const auto& vidx = get_index< witness_vote_index >().indices().get< by_account_witness >();
+//        auto wit_itr = vidx.lower_bound( boost::make_tuple( a.name, account_name_type() ) );
+//        while( wit_itr != vidx.end() && wit_itr->account == a.name )
+//        {
+//           ++witnesses_voted_for;
+//           ++wit_itr;
+//        }
+//      }
+//      if( a.witnesses_voted_for != witnesses_voted_for )
+//      {
+//         modify( a, [&]( account_object& account )
+//         {
+//            account.witnesses_voted_for = witnesses_voted_for;
+//         } );
+//      }
+//   }
 }
 
 #ifdef STEEM_ENABLE_SMT
