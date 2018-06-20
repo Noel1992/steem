@@ -1,4 +1,6 @@
 .project
+.cproject
+language.settings.xml
 
 *.a
 *.sw*
