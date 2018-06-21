@@ -4368,44 +4368,50 @@ void database::init_hardforks()
 
 void database::process_hardforks()
 {
-   try
-   {
-      // If there are upcoming hardforks and the next one is later, do nothing
-      const auto& hardforks = get_hardfork_property_object();
-
-      if( has_hardfork( STEEM_HARDFORK_0_5__54 ) )
-      {
-         while( _hardfork_versions[ hardforks.last_hardfork ] < hardforks.next_hardfork
-            && hardforks.next_hardfork_time <= head_block_time() )
-         {
-            if( hardforks.last_hardfork < STEEM_NUM_HARDFORKS ) {
-               apply_hardfork( hardforks.last_hardfork + 1 );
-            }
-            else
-               throw unknown_hardfork_exception();
-         }
-      }
-      else
-      {
-         while( hardforks.last_hardfork < STEEM_NUM_HARDFORKS
-               && _hardfork_times[ hardforks.last_hardfork + 1 ] <= head_block_time()
-               && hardforks.last_hardfork < STEEM_HARDFORK_0_5__54 )
-         {
-            apply_hardfork( hardforks.last_hardfork + 1 );
-         }
-      }
-   }
-   FC_CAPTURE_AND_RETHROW()
+//   try
+//   {
+//      // If there are upcoming hardforks and the next one is later, do nothing
+//      const auto& hardforks = get_hardfork_property_object();
+//
+//      if( has_hardfork( STEEM_HARDFORK_0_5__54 ) )
+//      {
+//         while( _hardfork_versions[ hardforks.last_hardfork ] < hardforks.next_hardfork
+//            && hardforks.next_hardfork_time <= head_block_time() )
+//         {
+//            if( hardforks.last_hardfork < STEEM_NUM_HARDFORKS ) {
+//               apply_hardfork( hardforks.last_hardfork + 1 );
+//            }
+//            else
+//               throw unknown_hardfork_exception();
+//         }
+//      }
+//      else
+//      {
+//         while( hardforks.last_hardfork < STEEM_NUM_HARDFORKS
+//               && _hardfork_times[ hardforks.last_hardfork + 1 ] <= head_block_time()
+//               && hardforks.last_hardfork < STEEM_HARDFORK_0_5__54 )
+//         {
+//            apply_hardfork( hardforks.last_hardfork + 1 );
+//         }
+//      }
+//   }
+//   FC_CAPTURE_AND_RETHROW()
 }
 
 bool database::has_hardfork( uint32_t hardfork )const
 {
-   return get_hardfork_property_object().processed_hardforks.size() > hardfork;
+   // disable hardfork.
+   return false;
+
+   // delete following statements freely after a long and stable running.
+   //return get_hardfork_property_object().processed_hardforks.size() > hardfork;
 }
 
 void database::set_hardfork( uint32_t hardfork, bool apply_now )
 {
-   auto const& hardforks = get_hardfork_property_object();
+   // disable hardfork
+   // delete following statements freely after a long and stable running.
+   // auto const& hardforks = get_hardfork_property_object();
 
    for( uint32_t i = hardforks.last_hardfork + 1; i <= hardfork && i <= STEEM_NUM_HARDFORKS; i++ )
    {
@@ -4420,9 +4426,9 @@ void database::set_hardfork( uint32_t hardfork, bool apply_now )
          } );
       }
 
-      if( apply_now )
-         apply_hardfork( i );
-   }
+   //    if( apply_now )
+   //       apply_hardfork( i );
+   // }
 }
 
 /**
