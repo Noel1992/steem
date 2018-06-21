@@ -55,7 +55,7 @@ namespace steem { namespace chain {
 
          bool _log_hardforks = true;
 
-         boost::mutex      block_mutex;
+         boost::mutex      block_mutex; //是block维度处理的锁，若后期再粒度优化block操作，再行细化
 
          enum validation_steps
          {

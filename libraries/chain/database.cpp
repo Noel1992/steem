@@ -755,7 +755,7 @@ signed_block database::generate_block(
    {
       try
       {  //加入block维度的锁，控制_generate_block，通知生成_pending_tx的snapshot
-    	  fc::scoped_lock sc_lock(db_mutex);
+    	  fc::scoped_lock sc_lock(block_mutex);
           result = _generate_block( when, witness_owner, block_signing_private_key, std::move(_pending_tx));
       }
       FC_CAPTURE_AND_RETHROW( (witness_owner) )
