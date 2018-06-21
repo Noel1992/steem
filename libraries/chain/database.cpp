@@ -2987,14 +2987,20 @@ void database::_apply_block( const signed_block& next_block )
          const hardfork_property_object& hardfork_state = get_hardfork_property_object();
          FC_ASSERT( hardfork_state.current_hardfork_version == _hardfork_versions[n], "Unexpected genesis hardfork state" );
 
-         const auto& witness_idx = get_index<witness_index>().indices().get<by_id>();
+         // witness_index 增加读锁
+         read_lock witness_lock(get_index_mutex(witness_object::type_id));
+
+         const auto& witness_idx = get_index<witness_index>(lock_type::none).indices().get<by_id>();
          vector<witness_id_type> wit_ids_to_update;
          for( auto it=witness_idx.begin(); it!=witness_idx.end(); ++it )
             wit_ids_to_update.push_back(it->id);
 
+         // witness_index 增加读锁
+         witness_lock.unlock();
+
          for( witness_id_type wit_id : wit_ids_to_update )
          {
-            modify( get( wit_id ), [&]( witness_object& wit )
+            modify( lock_type::write_lock, get( lock_type::read_lock, wit_id ), [&]( witness_object& wit )
             {
                wit.running_version = _hardfork_versions[n];
                wit.hardfork_version_vote = _hardfork_versions[n];
@@ -3043,7 +3049,7 @@ void database::_apply_block( const signed_block& next_block )
 
    /// modify current witness so transaction evaluators can know who included the transaction,
    /// this is mostly for POW operations which must pay the current_witness
-   modify( gprops, [&]( dynamic_global_property_object& dgp ){
+   modify( lock_type::write_lock, gprops, [&]( dynamic_global_property_object& dgp ){
       dgp.current_witness = next_block.witness;
    });
 
