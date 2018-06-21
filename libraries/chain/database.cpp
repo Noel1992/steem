@@ -3716,9 +3716,12 @@ void database::adjust_liquidity_reward( const account_object& owner, const asset
 	// 对liquidity_reward_balance_index加写锁
 	write_lock liquidity_lock(get_index_mutex(liquidity_reward_balance_object::type_id));
 
-   const auto& ridx = get_index< liquidity_reward_balance_index >(lock_type::none).indices().get< by_owner >();
-   auto itr = ridx.find( lock_type::none, owner.id );
-   if( itr != ridx.end() )
+	// TODO: 这里改成find是否最佳，待再考虑  fishermen
+   //const auto& ridx = get_index< liquidity_reward_balance_index >(lock_type::none).indices().get< by_owner >();
+   //auto itr = ridx.find( lock_type::none, owner.id );
+	liquidity_reward_balance_object* itr = find< liquidity_reward_balance_object,  by_owner>(lock_type::read_lock, owner.id);
+   //if( itr != ridx.end() )
+	if ( itr != nullptr )
    {
       modify<liquidity_reward_balance_object>( lock_type::none, *itr, [&]( liquidity_reward_balance_object& r )
       {
@@ -3825,6 +3828,8 @@ void database::clear_expired_transactions()
    const auto& dedupe_index = transaction_idx.indices().get< by_expiration >();
    while( ( !dedupe_index.empty() ) && ( head_block_time() > dedupe_index.begin()->expiration ) )
       remove( lock_type::none, *dedupe_index.begin() );
+
+   trx_lock.unlock();
 }
 
 void database::clear_expired_orders()
@@ -3975,7 +3980,7 @@ void database::modify_balance( const account_object& a, const asset& delta, bool
                   		op = interest_operation( a.name, interest_paid );
                      // push_virtual_operation( interest_operation( a.name, interest_paid ) );
 
-                  modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& props)
+                  modify( lock_type::write_lock, get_dynamic_global_properties(), [&]( dynamic_global_property_object& props)
                   {
                      props.current_sbd_supply += interest_paid;
                      props.virtual_supply += interest_paid * get_feed_history().current_median_history;
@@ -4897,7 +4902,7 @@ void database::validate_smt_invariants()const
       // - Market orders
       read_lock limit_lock(get_index_mutex(limit_order_object::type_id));
 
-      const auto& limit_order_idx = get_index< limit_order_index >().indices();
+      const auto& limit_order_idx = get_index< limit_order_index >(lock_type::none).indices();
       for( auto itr = limit_order_idx.begin(); itr != limit_order_idx.end(); ++itr )
       {
          if( itr->sell_price.base.symbol.space() == asset_symbol_type::smt_nai_space )
@@ -4918,8 +4923,8 @@ void database::validate_smt_invariants()const
       // Do the verification of total balances.
       read_lock smt_lock(get_index_mutex(smt_token_object::type_id));
 
-      auto itr = get_index< smt_token_index, by_id >().begin();
-      auto end = get_index< smt_token_index, by_id >().end();
+      auto itr = get_index< smt_token_index, by_id >(lock_type::none).begin();
+      auto end = get_index< smt_token_index, by_id >(lock_type::none).end();
       for( ; itr != end; ++itr )
       {
          const smt_token_object& smt = *itr;

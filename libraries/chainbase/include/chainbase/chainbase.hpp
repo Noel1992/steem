@@ -871,6 +871,7 @@ namespace chainbase {
                BOOST_THROW_EXCEPTION( std::runtime_error( "unable to find index for " + type_name + " in database" ) );
             }
 
+            // 对于get_index只能支持lock_type::none
             if (lock_type::none == lock) {
             		return *index_type_ptr( _index_map[index_type::value_type::type_id]->get() );
             }
@@ -1024,15 +1025,14 @@ namespace chainbase {
 					 // 加读锁，应对通用场景
 					 read_lock lock(get_index_mutex(ObjectType::type_id));
 
-					 auto obj = find< ObjectType, IndexedByType >( std::forward< CompatibleKey >( key ) );
+					 auto obj = find< ObjectType, IndexedByType >( lock_type::none, std::forward< CompatibleKey >( key ) );
 					 if( !obj ) BOOST_THROW_EXCEPTION( std::out_of_range( "unknown key" ) );
 					 return *obj;
 				}
             else if (lock_type::none == lock)
             {
-            		// 不加锁，务必注意外面必需要index_lock
-            		auto obj = find<ObjectType, IndexedByType>(
-					std::forward<CompatibleKey>(key));
+            	//TODO: 外面应该要加读锁？maybe 再想想 fishermen
+            		auto obj = find<ObjectType, IndexedByType>( lock_type::none, std::forward<CompatibleKey>(key));
             		if (!obj)
             			BOOST_THROW_EXCEPTION(std::out_of_range("unknown key"));
             		return *obj;
@@ -1053,14 +1053,14 @@ namespace chainbase {
             		// read lock for common scenes
             		read_lock lock(get_index_mutex(ObjectType::type_id));
 
-            		auto obj = find< ObjectType >( key );
+            		auto obj = find< ObjectType >( lock_type::none, key );
 					if( !obj ) BOOST_THROW_EXCEPTION( std::out_of_range( "unknown key") );
 					return *obj;
             }
             else if (lock_type::none == lock)
             {
-            		// not lock, u should lock outside! fishermen
-            		auto obj = find< ObjectType >( key );
+            		//TODO: 外面应该要加读锁？maybe 再想想 fishermen
+            		auto obj = find< ObjectType >( lock_type::none, key );
 					if( !obj ) BOOST_THROW_EXCEPTION( std::out_of_range( "unknown key") );
 					return *obj;
             }
@@ -1088,6 +1088,11 @@ namespace chainbase {
              else if (lock_type::none == lock)
              {
             	 	 // 不加写锁，外层必须得加index write lock
+            	 	 write_lock lock(get_index_mutex(ObjectType::type_id), bip::defer_lock_type());
+					 if (lock.try_lock()) {
+						 BOOST_THROW_EXCEPTION(std::logic_error("should already hold write lock when modify with lock_type::none"));
+					 }
+
             	 	 get_mutable_index<index_type>(lock_type::none).modify(obj, m);
              }
 
@@ -1112,6 +1117,12 @@ namespace chainbase {
 				}
 				else if (lock_type::none == lock)
 				{
+					// 对于none无锁，此前必须已经获取到写锁，否则出错
+					write_lock lock(get_index_mutex(ObjectType::type_id), bip::defer_lock_type());
+					if (lock.try_lock()) {
+						BOOST_THROW_EXCEPTION(std::logic_error("should already hold write lock when remove with lock_type::none"));
+					}
+
 					return get_mutable_index<index_type>(lock_type::none).remove(obj);
 				}
 
@@ -1133,6 +1144,12 @@ namespace chainbase {
              }
              else if (lock_type::none == lock)
              {
+            	 	 // 对于none无锁，此前必须已经获取到写锁，否则出错
+					 write_lock lock(get_index_mutex(ObjectType::type_id), bip::defer_lock_type());
+					 if (lock.try_lock()) {
+					 	BOOST_THROW_EXCEPTION(std::logic_error("should already hold write lock when create with lock_type::none"));
+					 }
+
             	 	 return get_mutable_index<index_type>(lock_type::none).emplace( std::forward<Constructor>(con) );
              }
 
