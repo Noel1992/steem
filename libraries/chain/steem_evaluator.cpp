@@ -82,6 +82,9 @@ void copy_legacy_chain_properties( chain_properties& dest, const legacy_chain_pr
 
 void witness_update_evaluator::do_apply( const witness_update_operation& o )
 {
+	// 根据owner加写锁
+	write_lock lock(_db.get_object_mutex(o.owner));
+
    _db.get_account( o.owner ); // verify owner exists
 
    if ( _db.has_hardfork( STEEM_HARDFORK_0_14__410 ) )
@@ -250,37 +253,42 @@ void verify_authority_accounts_exist(
 
 void account_create_evaluator::do_apply( const account_create_operation& o )
 {
-   const auto& creator = _db.get_account( o.creator );
 
-   const auto& props = _db.get_dynamic_global_properties();
+	{
+		// write_lock 和待保护的数据放入相同块中，当然也可以用new+delete，但为避免泄漏及死锁，放入块是最安全的 fishermen
+		write_lock creator_lock(_db.get_object_mutex(o.creator));
+		const auto& creator = _db.get_account( o.creator );
 
-   FC_ASSERT( creator.balance >= o.fee, "Insufficient balance to create account.", ( "creator.balance", creator.balance )( "required", o.fee ) );
+		const auto& props = _db.get_dynamic_global_properties();
 
-   if( _db.has_hardfork( STEEM_HARDFORK_0_19__987) )
-   {
-      const witness_schedule_object& wso = _db.get_witness_schedule_object();
-      FC_ASSERT( o.fee >= asset( wso.median_props.account_creation_fee.amount * STEEM_CREATE_ACCOUNT_WITH_STEEM_MODIFIER, STEEM_SYMBOL ), "Insufficient Fee: ${f} required, ${p} provided.",
-                 ("f", wso.median_props.account_creation_fee * asset( STEEM_CREATE_ACCOUNT_WITH_STEEM_MODIFIER, STEEM_SYMBOL ) )
-                 ("p", o.fee) );
-   }
-   else if( _db.has_hardfork( STEEM_HARDFORK_0_1 ) )
-   {
-      const witness_schedule_object& wso = _db.get_witness_schedule_object();
-      FC_ASSERT( o.fee >= wso.median_props.account_creation_fee, "Insufficient Fee: ${f} required, ${p} provided.",
-                 ("f", wso.median_props.account_creation_fee)
-                 ("p", o.fee) );
-   }
+		FC_ASSERT( creator.balance >= o.fee, "Insufficient balance to create account.", ( "creator.balance", creator.balance )( "required", o.fee ) );
 
-   if( _db.has_hardfork( STEEM_HARDFORK_0_15__465 ) )
-   {
-      verify_authority_accounts_exist( _db, o.owner, o.new_account_name, authority::owner );
-      verify_authority_accounts_exist( _db, o.active, o.new_account_name, authority::active );
-      verify_authority_accounts_exist( _db, o.posting, o.new_account_name, authority::posting );
-   }
+		if( _db.has_hardfork( STEEM_HARDFORK_0_19__987) )
+		{
+			const witness_schedule_object& wso = _db.get_witness_schedule_object();
+			FC_ASSERT( o.fee >= asset( wso.median_props.account_creation_fee.amount * STEEM_CREATE_ACCOUNT_WITH_STEEM_MODIFIER, STEEM_SYMBOL ), "Insufficient Fee: ${f} required, ${p} provided.",
+						  ("f", wso.median_props.account_creation_fee * asset( STEEM_CREATE_ACCOUNT_WITH_STEEM_MODIFIER, STEEM_SYMBOL ) )
+						  ("p", o.fee) );
+		}
+		else if( _db.has_hardfork( STEEM_HARDFORK_0_1 ) )
+		{
+			const witness_schedule_object& wso = _db.get_witness_schedule_object();
+			FC_ASSERT( o.fee >= wso.median_props.account_creation_fee, "Insufficient Fee: ${f} required, ${p} provided.",
+						  ("f", wso.median_props.account_creation_fee)
+						  ("p", o.fee) );
+		}
 
-   _db.modify( creator, [&]( account_object& c ){
-      c.balance -= o.fee;
-   });
+		if( _db.has_hardfork( STEEM_HARDFORK_0_15__465 ) )
+		{
+			verify_authority_accounts_exist( _db, o.owner, o.new_account_name, authority::owner );
+			verify_authority_accounts_exist( _db, o.active, o.new_account_name, authority::active );
+			verify_authority_accounts_exist( _db, o.posting, o.new_account_name, authority::posting );
+		}
+
+		_db.modify( creator, [&]( account_object& c ){
+			c.balance -= o.fee;
+		});
+	}
 
    const auto& new_account = _db.create< account_object >( [&]( account_object& acc )
    {
@@ -317,6 +325,9 @@ void account_create_evaluator::do_apply( const account_create_operation& o )
 void account_create_with_delegation_evaluator::do_apply( const account_create_with_delegation_operation& o )
 {
    FC_ASSERT( !_db.has_hardfork( STEEM_HARDFORK_0_20__1760 ), "Account creation with delegation is deprecated as of Hardfork 20" );
+
+   // write_lock 保护需要modify的creator
+   write_lock creator_lock(_db.get_object_mutex(o.creator));
 
    const auto& creator = _db.get_account( o.creator );
    const auto& props = _db.get_dynamic_global_properties();
@@ -414,6 +425,9 @@ void account_update_evaluator::do_apply( const account_update_operation& o )
 
    if( ( _db.has_hardfork( STEEM_HARDFORK_0_15__465 ) ) && o.posting )
       o.posting->validate();
+
+   // 需要保护account和account_auth，在query之后、modify之前不被并发修改
+   write_lock account_lock(_db.get_object_mutex(o.account));
 
    const auto& account = _db.get_account( o.account );
    const auto& account_auth = _db.get< account_authority_object, by_account >( o.account );
@@ -1133,7 +1147,9 @@ void account_witness_proxy_evaluator::do_apply( const account_witness_proxy_oper
    }
 }
 
-
+/**
+ * 这里只用index_lock会过于复杂，但好在有操作用户，所以可以结合object_lock + index_lock，可以较好解决。
+ */
 void account_witness_vote_evaluator::do_apply( const account_witness_vote_operation& o )
 {
    const auto& voter = _db.get_account( o.account );
@@ -1142,24 +1158,30 @@ void account_witness_vote_evaluator::do_apply( const account_witness_vote_operat
    if( o.approve )
       FC_ASSERT( voter.can_vote, "Account has declined its voting rights." );
 
+   // 后面会对witness做修改，此处先对该witness加object_lock写锁
+   write_lock witness_lock(_db.get_object_mutex(o.witness));
+
    const auto& witness = _db.get_witness( o.witness );
 
-   const auto& by_account_witness_idx = _db.get_index< witness_vote_index >().indices().get< by_account_witness >();
-   auto itr = by_account_witness_idx.find( boost::make_tuple( voter.name, witness.owner ) );
+   // 此处改为直接从db进行find获取，尽量减少get_index的调用
+   //const auto& by_account_witness_idx = _db.get_index< witness_vote_index >().indices().get< by_account_witness >();
+   //auto itr = by_account_witness_idx.find( boost::make_tuple( voter.name, witness.owner ) );
+   witness_vote_object* witness_vote = _db.find<witness_vote_object, by_account_witness>(lock_type::read_lock, boost::make_tuple( voter.name, witness.owner ));
 
-   if( itr == by_account_witness_idx.end() ) {
+   if( witness_vote == nullptr ) {
       FC_ASSERT( o.approve, "Vote doesn't exist, user must indicate a desire to approve witness." );
 
       if ( _db.has_hardfork( STEEM_HARDFORK_0_2 ) )
       {
          FC_ASSERT( voter.witnesses_voted_for < STEEM_MAX_ACCOUNT_WITNESS_VOTES, "Account has voted for too many witnesses." ); // TODO: Remove after hardfork 2
 
-         _db.create<witness_vote_object>( [&]( witness_vote_object& v ) {
+         _db.create<witness_vote_object>( [&]( lock_type::write_lock, witness_vote_object& v ) {
              v.witness = witness.owner;
              v.account = voter.name;
          });
 
          if( _db.has_hardfork( STEEM_HARDFORK_0_3 ) ) {
+         		FC_ASSERT(false, "only support latest hardfork!");
             _db.adjust_witness_vote( witness, voter.witness_vote_weight() );
          }
          else {
@@ -1168,16 +1190,16 @@ void account_witness_vote_evaluator::do_apply( const account_witness_vote_operat
 
       } else {
 
-         _db.create<witness_vote_object>( [&]( witness_vote_object& v ) {
+         _db.create<witness_vote_object>( lock_type::write_lock, [&]( witness_vote_object& v ) {
              v.witness = witness.owner;
              v.account = voter.name;
          });
-         _db.modify( witness, [&]( witness_object& w ) {
+         _db.modify( lock_type::write_lock, witness, [&]( witness_object& w ) {
              w.votes += voter.witness_vote_weight();
          });
 
       }
-      _db.modify( voter, [&]( account_object& a ) {
+      _db.modify( lock_type::write_lock, voter, [&]( account_object& a ) {
          a.witnesses_voted_for++;
       });
 
@@ -1190,15 +1212,18 @@ void account_witness_vote_evaluator::do_apply( const account_witness_vote_operat
          else
             _db.adjust_proxied_witness_votes( voter, -voter.witness_vote_weight() );
       } else  {
-         _db.modify( witness, [&]( witness_object& w ) {
+         _db.modify( lock_type::write_lock, witness, [&]( witness_object& w ) {
              w.votes -= voter.witness_vote_weight();
          });
       }
-      _db.modify( voter, [&]( account_object& a ) {
+      _db.modify( lock_type::write_lock, voter, [&]( account_object& a ) {
          a.witnesses_voted_for--;
       });
-      _db.remove( *itr );
+      _db.remove( lock_type::write_lock, *witness_vote );
    }
+
+   // witness加object_lock 解锁， 额外做一个解锁动作，方便后续加新逻辑
+   witness_lock.unlock();
 }
 
 void vote_evaluator::do_apply( const vote_operation& o )

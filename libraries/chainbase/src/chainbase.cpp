@@ -68,6 +68,13 @@ namespace chainbase {
       _flock = bip::file_lock( abs_path.generic_string().c_str() );
       if( !_flock.try_lock() )
          BOOST_THROW_EXCEPTION( std::runtime_error( "could not gain write access to the shared memory file" ) );
+
+      // init objects locks
+      _object_mutex_map.reserve(OBJECT_LOCKS);
+      for (int i = 0; i < OBJECT_LOCKS; i++)
+      {
+      		_object_mutex_map[i].reset(new read_write_mutex());
+      }
    }
 
    void database::flush() {

@@ -2,6 +2,7 @@
 #include <steem/protocol/block_header.hpp>
 #include <steem/protocol/transaction.hpp>
 
+
 namespace steem { namespace protocol {
 
    struct signed_block : public signed_block_header
