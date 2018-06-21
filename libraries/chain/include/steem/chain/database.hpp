@@ -55,7 +55,7 @@ namespace steem { namespace chain {
 
          bool _log_hardforks = true;
 
-         boost::mutex      db_mutex;
+         boost::mutex      block_mutex;
 
          enum validation_steps
          {
