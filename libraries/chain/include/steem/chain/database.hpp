@@ -55,6 +55,8 @@ namespace steem { namespace chain {
 
          bool _log_hardforks = true;
 
+         boost::mutex      block_mutex; //是block维度处理的锁，若后期再粒度优化block操作，再行细化
+
          enum validation_steps
          {
             skip_nothing                = 0,
@@ -191,7 +193,7 @@ namespace steem { namespace chain {
          const flat_map<uint32_t,block_id_type> get_checkpoints()const { return _checkpoints; }
          bool                                   before_last_checkpoint()const;
 
-         bool push_block( const signed_block& b, uint32_t skip = skip_nothing );
+         bool push_block( const signed_block& b, uint32_t skip = skip_nothing ,const std::vector<signed_transaction>&& pending_snapshot);
          void push_transaction( const signed_transaction& trx, uint32_t skip = skip_nothing );
          void _maybe_warn_multiple_production( uint32_t height )const;
          bool _push_block( const signed_block& b );
@@ -206,8 +208,12 @@ namespace steem { namespace chain {
          signed_block _generate_block(
             const fc::time_point_sec when,
             const account_name_type& witness_owner,
-            const fc::ecc::private_key& block_signing_private_key
+            const fc::ecc::private_key& block_signing_private_key,
+			const std::vector<signed_transaction>&& pending_snapshot
             );
+
+         void apply_tx_with_undo(const signed_transaction& tx);
+         void apply_unkwon_tx(const signed_transaction& tx);
 
          void pop_block();
          void clear_pending();

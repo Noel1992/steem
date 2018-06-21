@@ -45,7 +45,7 @@ struct skip_flags_restorer
  */
 struct pending_transactions_restorer
 {
-   pending_transactions_restorer( database& db, std::vector<signed_transaction>&& pending_transactions )
+   pending_transactions_restorer( database& db, const std::vector<signed_transaction>&& pending_transactions )
       : _db(db), _pending_transactions( std::move(pending_transactions) )
    {
       _db.clear_pending();
@@ -126,7 +126,7 @@ void with_skip_flags(
 template< typename Lambda >
 void without_pending_transactions(
    database& db,
-   std::vector<signed_transaction>&& pending_transactions,
+   const std::vector<signed_transaction>&& pending_transactions,
    Lambda callback )
 {
     pending_transactions_restorer restorer( db, std::move(pending_transactions) );
