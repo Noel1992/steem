@@ -746,7 +746,7 @@ void database::_push_transaction( const signed_transaction& trx )
    notify_changed_objects();
 
    // The transaction applied successfully. Merge its changes into the pending block session.
-   if( idempotency )
+   if( !idempotency )
    {
    		temp_session.squash();
    }
@@ -3378,6 +3378,7 @@ void database::apply_operation(const operation& op)
 /**
  * 目前对三种op进行降级幂等处理：创建account、发贴、删贴；对应的op为：account_create_operation,account_update_operation，
  * 以及comment_operation，delete_comment_operation,
+ * TODO: IPC 还有哪些操作？也需要加进来 fishermen
  */
 bool database::is_idempotency( const operation& op )
 {
