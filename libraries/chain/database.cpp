@@ -755,8 +755,6 @@ signed_block database::generate_block(
    {
       try
       {  //加入block维度的锁，控制_generate_block，通知生成_pending_tx的snapshot
-//    	  std::vector< signed_transaction >&& _pending_snapshot;
-//    	  _pending_snapshot( std::move(_pending_tx));
     	  fc::scoped_lock sc_lock(db_mutex);
           result = _generate_block( when, witness_owner, block_signing_private_key, std::move(_pending_tx));
       }
@@ -2822,7 +2820,10 @@ void database::_apply_block( const signed_block& next_block )
        * for transactions when validating broadcast transactions or
        * when building a block.
        */
-      apply_transaction( trx, skip );
+	   if(!is_known_transaction(trx.id())){
+		   elog("apply_block has not apply transaction ",("id:",trx.id()));
+		   apply_transaction( trx, skip );
+	   }
       ++_current_trx_in_block;
    }
 
