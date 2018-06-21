@@ -1183,7 +1183,7 @@ void account_witness_vote_evaluator::do_apply( const account_witness_vote_operat
 
          if( _db.has_hardfork( STEEM_HARDFORK_0_3 ) ) {
          		FC_ASSERT(false, "only support latest hardfork!");
-            _db.adjust_witness_vote( lock_type::write_lock, witness, voter.witness_vote_weight() );
+            _db.adjust_witness_vote( witness, voter.witness_vote_weight() );
          }
          else {
             _db.adjust_proxied_witness_votes( voter, voter.witness_vote_weight() );
@@ -1209,7 +1209,7 @@ void account_witness_vote_evaluator::do_apply( const account_witness_vote_operat
 
       if (  _db.has_hardfork( STEEM_HARDFORK_0_2 ) ) {
          if( _db.has_hardfork( STEEM_HARDFORK_0_3 ) )
-            _db.adjust_witness_vote( lock_type::write_lock, witness, -voter.witness_vote_weight() );
+            _db.adjust_witness_vote( witness, -voter.witness_vote_weight() );
          else
             _db.adjust_proxied_witness_votes( voter, -voter.witness_vote_weight() );
       } else  {

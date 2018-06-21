@@ -445,7 +445,7 @@ const comment_object* database::find_comment( const account_name_type& author, c
 
 const escrow_object& database::get_escrow( const account_name_type& name, uint32_t escrow_id )const
 { try {
-   return get< escrow_object, by_from_id >( boost::make_tuple( name, escrow_id ) );
+   return get< escrow_object, by_from_id >( lock_type::read_lock, boost::make_tuple( name, escrow_id ) );
 } FC_CAPTURE_AND_RETHROW( (name)(escrow_id) ) }
 
 const escrow_object* database::find_escrow( const account_name_type& name, uint32_t escrow_id )const
@@ -1240,22 +1240,17 @@ void database::adjust_witness_votes( const account_name_type& name, share_type d
    /*=====  witness_vote_index end! =====*/
    witness_vote_lock.unlock();
 
-   // witness_index start..., end before return from this function
-   write_lock witness_lock(get_index_mutex(witness_object::type_id));
-
    for (auto it = witnesses.begin(); it != witnesses.end(); it++)
    {
-   		adjust_witness_vote( lock::none, get< witness_object, by_name >(*itr), delta );
+   		adjust_witness_vote(get< witness_object, by_name >(lock_type::read_lock, *itr), delta );
    }
 
-   // 主动对witness_index解锁
-   witness_lock.unlock();
 }
 
-void database::adjust_witness_vote( lock_type lock, const witness_object& witness, share_type delta )
+void database::adjust_witness_vote( const witness_object& witness, share_type delta )
 {
    const witness_schedule_object& wso = get_witness_schedule_object();
-   modify( lock, witness, [&]( witness_object& w )
+   modify( lock_type::write_lock, witness, [&]( witness_object& w )
    {
       auto delta_pos = w.votes.value * (wso.current_virtual_time - w.virtual_last_update);
       w.virtual_position += delta_pos;
@@ -1283,7 +1278,7 @@ void database::clear_witness_votes( const account_object& a )
 	// 对witness_vote_index 增加写锁，批量删除
 	write_lock witness_vote_lock(get_index_mutex(witness_vote_object::type_id));
 
-   const auto& vidx = get_index< witness_vote_index >().indices().get<by_account_witness>();
+   const auto& vidx = get_index< witness_vote_index >(lock_type::none).indices().get<by_account_witness>();
    auto itr = vidx.lower_bound( boost::make_tuple( a.name, account_name_type() ) );
    while( itr != vidx.end() && itr->account == a.name )
    {
@@ -1437,6 +1432,8 @@ void database::update_owner_authority( const account_object& account, const auth
  */
 void database::process_vesting_withdrawals()
 {
+	const auto& cprops = get_dynamic_global_properties();
+
 	// 按object_type的顺序进行加写锁，然后获取数据，后面统一再处理
 	write_lock account_lock(get_index_mutex(account_object::type_id));
 	write_lock withdraw_vesting_route_lock(get_index_mutex(withdraw_vesting_route_object::type_id));
@@ -1445,9 +1442,6 @@ void database::process_vesting_withdrawals()
    const auto& didx = get_index< withdraw_vesting_route_index, by_withdraw_route >(lock_type::none);
    auto current = widx.begin();
 
-   const auto& cprops = get_dynamic_global_properties();
-
-   std::list<boost::tuple<account_name_type, share_type>> auto_vest_deposits;
 	std::list<fill_vesting_withdraw_operation> auto_vest_withdraw_operations;
 	std::list<fill_vesting_withdraw_operation> not_auto_vest_withdraw_operations;
 	std::list<boost::tuple<account_name_type, share_type>> from_account_withdraws;
@@ -1493,7 +1487,6 @@ void database::process_vesting_withdrawals()
                   a.vesting_shares.amount += to_deposit;
                });
                // 把包含外部函数的db操作独立出来
-               auto_vest_deposits.push_back(boost::make_tuple(to_account, to_deposit));
                auto_vest_withdraw_operations.push_back(fill_vesting_withdraw_operation( from_account.name, to_account.name, asset( to_deposit, VESTS_SYMBOL ), asset( to_deposit, VESTS_SYMBOL ) ));
                /**
                adjust_proxied_witness_votes( to_account, to_deposit );
@@ -1526,8 +1519,8 @@ void database::process_vesting_withdrawals()
                   a.balance += converted_steem;
                });
 
-               // dynamic_global_property_index 在最外层已加写锁
-               modify( lock_type::none, cprops, [&]( dynamic_global_property_object& o )
+               // dynamic_global_property_index 单独加写锁
+               modify( lock_type::write_lock, cprops, [&]( dynamic_global_property_object& o )
                {
                   o.total_vesting_fund_steem -= converted_steem;
                   o.total_vesting_shares.amount -= to_deposit;
@@ -1564,7 +1557,7 @@ void database::process_vesting_withdrawals()
       });
 
       // dynamic_global_property_index 外层已加写锁
-      modify( lock_type::none, cprops, [&]( dynamic_global_property_object& o )
+      modify( lock_type::write_lock, cprops, [&]( dynamic_global_property_object& o )
       {
          o.total_vesting_fund_steem -= converted_steem;
          o.total_vesting_shares.amount -= to_convert;
@@ -1584,20 +1577,12 @@ void database::process_vesting_withdrawals()
    withdraw_vesting_route_lock.unlock();
    account_lock.unlock();
 
-   std::list<fill_vesting_withdraw_operation> auto_vest_withdraw_operations;
-   	std::list<fill_vesting_withdraw_operation> not_auto_vest_withdraw_operations;
-   	std::list<boost::tuple<account_name_type, share_type>> from_account_withdraws;
-   	std::list<fill_vesting_withdraw_operation> from_account_withdraw_operations;
-
    /*==== 外部调用处理需要在锁外部进行 ====*/
-
-   for (auto itr = auto_vest_deposits.begin(); itr != auto_vest_deposits.end(); ++itr)
-   {
-   		adjust_proxied_witness_votes( itr->get<0>(), itr->get<1>() );
-   }
 
    for (auto itr = auto_vest_withdraw_operations.begin(); itr != auto_vest_withdraw_operations.end(); ++itr)
    {
+   		const auto& to_account = get< account_object, by_name >( lock_type::read_lock, itr->to_account );
+   		adjust_proxied_witness_votes( to_account, itr->deposited.amount );
    		push_virtual_operation( *itr);
    }
 
@@ -1656,7 +1641,7 @@ share_type database::pay_curators( const comment_object& c, share_type& max_rewa
 
       		std::list<boost::tuple<account_id_type, uint64_t>> voters;
 
-         const auto& cvidx = get_index<comment_vote_index>().indices().get<by_comment_weight_voter>();
+         const auto& cvidx = get_index<comment_vote_index>(lock_type::none).indices().get<by_comment_weight_voter>();
          auto itr = cvidx.lower_bound( c.id );
          while( itr != cvidx.end() && itr->comment == c.id )
          {
@@ -1820,7 +1805,7 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
       // 锁住comment_vote_index，进行读取、判断、更新
       write_lock comment_vote_lock(get_index_mutex(comment_vote_object::type_id));
 
-      const auto& vote_idx = get_index< comment_vote_index >().indices().get< by_comment_voter >();
+      const auto& vote_idx = get_index< comment_vote_index >(lock_type::none).indices().get< by_comment_voter >();
       auto vote_itr = vote_idx.lower_bound( comment.id );
       while( vote_itr != vote_idx.end() && vote_itr->comment == comment.id )
       {
@@ -1828,7 +1813,7 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
          ++vote_itr;
          if( !has_hardfork( STEEM_HARDFORK_0_12__177 ) || calculate_discussion_payout_time( comment ) != fc::time_point_sec::maximum() )
          {
-            modify( cur_vote, [&]( comment_vote_object& cvo )
+            modify( lock_type::none, cur_vote, [&]( comment_vote_object& cvo )
             {
                cvo.num_changes = -1;
             });
@@ -1836,7 +1821,7 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
          else
          {
 #ifdef CLEAR_VOTES
-            remove( cur_vote );
+            remove( lock_type::none, cur_vote );
 #endif
          }
       }
@@ -1894,8 +1879,8 @@ void database::process_comment_cashout()
    // 对comment_index 加读锁，构建所需数据
    read_lock comment_lock(get_index_mutex(comment_object::type_id));
 
-   const auto& cidx        = get_index< comment_index >().indices().get< by_cashout_time >();
-   const auto& com_by_root = get_index< comment_index >().indices().get< by_root >();
+   const auto& cidx        = get_index< comment_index >(lock_type::none).indices().get< by_cashout_time >();
+   const auto& com_by_root = get_index< comment_index >(lock_type::none).indices().get< by_root >();
 
    auto current = cidx.begin();
    //  add all rshares about to be cashed out to the reward funds. This ensures equal satoshi per rshare payment
@@ -1983,7 +1968,7 @@ void database::process_comment_cashout()
    {
       for( size_t i = 0; i < funds.size(); i++ )
       {
-         modify( lock_type::write_lock, get< reward_fund_object, by_id >( reward_fund_id_type( i ) ), [&]( reward_fund_object& rfo )
+         modify( lock_type::write_lock, get< reward_fund_object, by_id >( lock_type::read_lock, reward_fund_id_type( i ) ), [&]( reward_fund_object& rfo )
          {
             rfo.recent_claims = funds[ i ].recent_claims;
             rfo.reward_balance -= asset( funds[ i ].steem_awarded, STEEM_SYMBOL );
@@ -2087,7 +2072,7 @@ void database::process_savings_withdraws()
   // 对saving_withdraw_index 加写锁，信息记录到transfer_ops,并做清理动作
   write_lock saving_withdraw_lock(get_index_mutex(savings_withdraw_object::type_id));
 
-  const auto& idx = get_index< savings_withdraw_index >().indices().get< by_complete_from_rid >();
+  const auto& idx = get_index< savings_withdraw_index >(lock_type::none).indices().get< by_complete_from_rid >();
   auto itr = idx.begin();
   while( itr != idx.end() ) {
      if( itr->complete > head_block_time() )
@@ -2105,7 +2090,7 @@ void database::process_savings_withdraws()
 
      push_virtual_operation( fill_transfer_from_savings_operation( itr->from, itr->to, itr->amount, itr->request_id, to_string( itr->memo) ) );
 	  */
-     remove( *itr );
+     remove( lock_type::none, *itr );
      itr = idx.begin();
   }
 
@@ -2211,8 +2196,9 @@ void database::pay_liquidity_reward()
       // 对liquidity_reward_balance_index加读锁，获取所需的obj
       read_lock liquidity_reward_lock(get_index_mutex(liquidity_reward_balance_object::type_id));
 
-      const auto& ridx = get_index< liquidity_reward_balance_index >().indices().get< by_volume_weight >();
+      const auto& ridx = get_index< liquidity_reward_balance_index >(lock_type::none).indices().get< by_volume_weight >();
       auto itr = ridx.begin();
+      // 这里用if，所以可以在下面的执行中先进行unlock，然后继续加锁单条执行其他操作
       if( itr != ridx.end() && itr->volume_weight() > 0 )
       {
       		// liquidity_reward_balance_index 读锁进行解锁
@@ -2284,6 +2270,7 @@ void database::process_conversions()
    auto now = head_block_time();
 
    std::list<fill_convert_request_operation> fill_ops;
+
    // 对convert_request_index加写锁，获取数据并进行数据清理
    write_lock covert_lock(get_index_mutex(convert_request_object::type_id));
 
@@ -2351,7 +2338,7 @@ void database::account_recovery_processing()
 	// 对account_recovery_request_index加写锁
 	write_lock account_recovery_request_lock(get_index_mutex(account_recovery_request_object::type_id));
 
-   const auto& rec_req_idx = get_index< account_recovery_request_index >().indices().get< by_expiration >();
+   const auto& rec_req_idx = get_index< account_recovery_request_index >(lock_type::none).indices().get< by_expiration >();
    auto rec_req = rec_req_idx.begin();
 
    while( rec_req != rec_req_idx.end() && rec_req->expires <= head_block_time() )
@@ -2367,7 +2354,8 @@ void database::account_recovery_processing()
    // 对owner_authority_history_index加写锁
    write_lock owner_authority_history_lock(get_index_mutex(owner_authority_history_object::type_id));
 
-   const auto& hist_idx = get_index< owner_authority_history_index >().indices(); //by id
+   //TODO: 这里的实现有点奇怪？？
+   const auto& hist_idx = get_index< owner_authority_history_index >(lock_type::none).indices(); //by id
    auto hist = hist_idx.begin();
 
    while( hist != hist_idx.end() && time_point_sec( hist->last_valid_time + STEEM_OWNER_AUTH_RECOVERY_PERIOD ) < head_block_time() )
@@ -2384,7 +2372,7 @@ void database::account_recovery_processing()
    write_lock change_recovery_account_request_lock(get_index_mutex(change_recovery_account_request_object::type_id));
 
    std::list<boost::tuple<account_name_type, account_name_type>> accounts;
-   const auto& change_req_idx = get_index< change_recovery_account_request_index >().indices().get< by_effective_date >();
+   const auto& change_req_idx = get_index< change_recovery_account_request_index >(lock_type::none).indices().get< by_effective_date >();
    auto change_req = change_req_idx.begin();
 
    while( change_req != change_req_idx.end() && change_req->effective_on <= head_block_time() )
@@ -2419,7 +2407,7 @@ void database::expire_escrow_ratification()
 	write_lock escrow_lock(get_index_mutex(escrow_object::type_id));
 
 	std::list<escrow_object> escrows;
-   const auto& escrow_idx = get_index< escrow_index >().indices().get< by_ratification_deadline >();
+   const auto& escrow_idx = get_index< escrow_index >(lock_type::none).indices().get< by_ratification_deadline >();
    auto escrow_itr = escrow_idx.lower_bound( false );
 
    while( escrow_itr != escrow_idx.end() && !escrow_itr->is_approved() && escrow_itr->ratification_deadline <= head_block_time() )
@@ -2456,12 +2444,12 @@ void database::process_decline_voting_rights()
 	write_lock decline_lock(get_index_mutex(decline_voting_rights_request_object::type_id));
 
 	std::list<account_object> accounts;
-   const auto& request_idx = get_index< decline_voting_rights_request_index >().indices().get< by_effective_date >();
+   const auto& request_idx = get_index< decline_voting_rights_request_index >(lock_type::none).indices().get< by_effective_date >();
    auto itr = request_idx.begin();
 
    while( itr != request_idx.end() && itr->effective_date <= head_block_time() )
    {
-      const auto& account = get< account_object, by_name >( itr->account );
+      const auto& account = get< account_object, by_name >( lock_type::none, itr->account );
 
       /// remove all current votes
       std::array<share_type, STEEM_MAX_PROXY_RECURSION_DEPTH+1> delta;
@@ -2474,13 +2462,13 @@ void database::process_decline_voting_rights()
       // adjust_proxied_witness_votes( account, delta );
       // clear_witness_votes( account );
 
-      modify( account, [&]( account_object& a )
+      modify( lock_type::none, account, [&]( account_object& a )
       {
          a.can_vote = false;
          a.proxy = STEEM_PROXY_TO_SELF_ACCOUNT;
       });
 
-      remove( *itr );
+      remove( lock_type::none, *itr );
       itr = request_idx.begin();
    }
 
@@ -3595,7 +3583,7 @@ bool database::apply_order( const limit_order_object& new_order_object )
    // 对limit_order_index加读锁
    read_lock limit_lock(get_index_mutex(limit_order_object::type_id));
 
-   const auto& limit_price_idx = get_index<limit_order_index>().indices().get<by_price>();
+   const auto& limit_price_idx = get_index<limit_order_index>(lock_type::none).indices().get<by_price>();
 
    auto max_price = ~new_order_object.sell_price;
    auto limit_itr = limit_price_idx.lower_bound(max_price.max());
@@ -3723,7 +3711,7 @@ void database::adjust_liquidity_reward( const account_object& owner, const asset
 	write_lock liquidity_lock(get_index_mutex(liquidity_reward_balance_object::type_id));
 
    const auto& ridx = get_index< liquidity_reward_balance_index >(lock_type::none).indices().get< by_owner >();
-   auto itr = ridx.find( owner.id );
+   auto itr = ridx.find( lock_type::none, owner.id );
    if( itr != ridx.end() )
    {
       modify<liquidity_reward_balance_object>( lock_type::none, *itr, [&]( liquidity_reward_balance_object& r )
@@ -3827,7 +3815,7 @@ void database::clear_expired_transactions()
 	// 对transaction_index加写锁
 	write_lock trx_lock(get_index_mutex(transaction_object::type_id));
 
-   auto& transaction_idx = get_index< transaction_index >();
+   auto& transaction_idx = get_index< transaction_index >(lock_type::none);
    const auto& dedupe_index = transaction_idx.indices().get< by_expiration >();
    while( ( !dedupe_index.empty() ) && ( head_block_time() > dedupe_index.begin()->expiration ) )
       remove( lock_type::none, *dedupe_index.begin() );
@@ -3842,7 +3830,7 @@ void database::clear_expired_orders()
    //对limit_order_index加读锁
    read_lock limit_lock(get_index_mutex(limit_order_object::type_id));
 
-   const auto& orders_by_exp = get_index<limit_order_index>().indices().get<by_expiration>();
+   const auto& orders_by_exp = get_index<limit_order_index>(lock_type::none).indices().get<by_expiration>();
    auto itr = orders_by_exp.begin();
    while( itr != orders_by_exp.end() && itr->expiration < now )
    {
@@ -3869,7 +3857,7 @@ void database::clear_expired_delegations()
    write_lock vesting_lock(get_index_mutex(vesting_delegation_expiration_object::type_id));
 
    std::list<return_vesting_delegation_operation> ops;
-   const auto& delegations_by_exp = get_index< vesting_delegation_expiration_index, by_expiration >();
+   const auto& delegations_by_exp = get_index< vesting_delegation_expiration_index, by_expiration >(lock_type::none);
    auto itr = delegations_by_exp.begin();
    while( itr != delegations_by_exp.end() && itr->expiration < now )
    {
@@ -3882,7 +3870,7 @@ void database::clear_expired_delegations()
 
       push_virtual_operation( return_vesting_delegation_operation( itr->delegator, itr->vesting_shares ) );
 		*/
-      remove( *itr );
+      remove( lock_type::none, *itr );
       itr = delegations_by_exp.begin();
    }
 
@@ -4649,7 +4637,7 @@ void database::apply_hardfork( uint32_t hardfork )
 
             /* Remove all 0 delegation objects */
             vector< const vesting_delegation_object* > to_remove;
-            const auto& delegation_idx = get_index< vesting_delegation_index, by_id >();
+            const auto& delegation_idx = get_index< vesting_delegation_index, by_id >(lock_type::none);
             auto delegation_itr = delegation_idx.begin();
 
             while( delegation_itr != delegation_idx.end() )
@@ -4662,7 +4650,7 @@ void database::apply_hardfork( uint32_t hardfork )
 
             for( const vesting_delegation_object* delegation_ptr: to_remove )
             {
-               remove( *delegation_ptr );
+               remove( lock_type::none, *delegation_ptr );
             }
 
             // 加上，避免后面又追加代码
@@ -4696,15 +4684,15 @@ void database::retally_liquidity_weight() {
 	//对liquidity_reward_balance_index加写锁
 	write_lock liquidity_lock(get_index_mutex(liquidity_reward_balance_object::type_id));
 
-   const auto& ridx = get_index< liquidity_reward_balance_index >().indices().get< by_owner >();
+   const auto& ridx = get_index< liquidity_reward_balance_index >(lock_type::none).indices().get< by_owner >();
    for( const auto& i : ridx ) {
-      modify( i, []( liquidity_reward_balance_object& o ){
+      modify( lock_type::none, i, []( liquidity_reward_balance_object& o ){
          o.update_weight(true/*HAS HARDFORK10 if this method is called*/);
       });
    }
 
    // 解锁，预防追加代码
-   liquidity_lock.unlock;
+   liquidity_lock.unlock();
 }
 
 /**
@@ -4757,7 +4745,7 @@ void database::validate_invariants()const
       account_lock.unlock();
 
       //对convert_request_index加读锁
-      read_lock convert_lock(convert_request_object::type_id);
+      read_lock convert_lock(get_index_mutex(convert_request_object::type_id));
 
       const auto& convert_request_idx = get_index< convert_request_index >(lock_type::none).indices();
 
@@ -4774,7 +4762,7 @@ void database::validate_invariants()const
       convert_lock.unlock();
 
       // 对limit_order_index加读锁
-      read_lock limit_order_lock(limit_order_object::type_id);
+      read_lock limit_order_lock(get_index_mutex(limit_order_object::type_id));
 
       const auto& limit_order_idx = get_index< limit_order_index >(lock_type::none).indices();
 
@@ -4951,12 +4939,12 @@ void database::perform_vesting_share_split( uint32_t magnitude )
       } );
 
       	// 对account_index加写锁
-      write_lock account_lock(account_object::type_id);
+      write_lock account_lock(get_index_mutex(account_object::type_id));
 
       // Need to update all VESTS in accounts and the total VESTS in the dgpo
-      for( const auto& account : get_index<account_index>().indices() )
+      for( const auto& account : get_index<account_index>(lock_type::none).indices() )
       {
-         modify( lock_type::none, lock_type::none, account, [&]( account_object& a )
+         modify( lock_type::none, account, [&]( account_object& a )
          {
             a.vesting_shares.amount *= magnitude;
             a.withdrawn             *= magnitude;

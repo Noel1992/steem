@@ -906,6 +906,7 @@ namespace chainbase {
 
          /**
           * 强制传入lock_type,来强制检查所有调用地！ fishermen
+          * TODO：两个重载的get_index，找时间重构一下，可以干掉一个
           */
          template<typename MultiIndexType, typename ByIndex>
          auto get_index(lock_type lock)const -> decltype( ((generic_index<MultiIndexType>*)( nullptr ))->indicies().template get<ByIndex>() )
