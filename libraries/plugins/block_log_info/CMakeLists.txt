@@ -1,3 +1,4 @@
+if( CK01 )
 file(GLOB HEADERS "include/steem/plugins/block_log_info/*.hpp")
 
 add_library( block_log_info_plugin
@@ -22,3 +23,4 @@ install( TARGETS
    LIBRARY DESTINATION lib
    ARCHIVE DESTINATION lib
 )
+endif( CK01 )

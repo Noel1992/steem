@@ -1,3 +1,4 @@
+if( CK01 )
 file(GLOB HEADERS "include/steem/plugins/debug_node/*.hpp")
 
 add_library( debug_node_plugin
@@ -21,3 +22,4 @@ install( TARGETS debug_node_plugin
          LIBRARY DESTINATION lib
          ARCHIVE DESTINATION lib
        )
+endif( CK01 )
