@@ -1,3 +1,4 @@
+if(CK01)
 file(GLOB HEADERS "include/steem/plugins/follow_api/*.hpp")
 add_library( follow_api_plugin
              follow_api_plugin.cpp
@@ -21,3 +22,4 @@ install( TARGETS
    LIBRARY DESTINATION lib
    ARCHIVE DESTINATION lib
 )
+endif(CK01)

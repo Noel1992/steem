@@ -32,6 +32,7 @@ class database_api
          * @brief Retrieve the current @ref dynamic_global_property_object
          */
          (get_dynamic_global_properties)
+#ifdef CK01
          (get_witness_schedule)
          (get_hardfork_properties)
          (get_reward_funds)
@@ -138,6 +139,7 @@ class database_api
          */
          (get_smt_next_identifier)
 #endif
+#endif // CK01
       )
 
    private:

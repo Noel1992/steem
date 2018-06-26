@@ -1,6 +1,7 @@
 #include <steem/plugins/condenser_api/condenser_api.hpp>
 #include <steem/plugins/condenser_api/condenser_api_plugin.hpp>
 
+#ifdef CK01
 #include <steem/plugins/database_api/database_api_plugin.hpp>
 #include <steem/plugins/block_api/block_api_plugin.hpp>
 #include <steem/plugins/account_history_api/account_history_api_plugin.hpp>
@@ -10,6 +11,7 @@
 #include <steem/plugins/follow_api/follow_api_plugin.hpp>
 #include <steem/plugins/market_history_api/market_history_api_plugin.hpp>
 #include <steem/plugins/witness_api/witness_api_plugin.hpp>
+#endif // CK01
 
 #include <steem/utilities/git_revision.hpp>
 
@@ -35,6 +37,7 @@ namespace detail
 
          DECLARE_API_IMPL(
             (get_version)
+#ifdef CK01
             (get_trending_tags)
             (get_state)
             (get_active_witnesses)
@@ -80,7 +83,9 @@ namespace detail
             (verify_account_authority)
             (get_active_votes)
             (get_account_votes)
+#endif // CK01
             (get_content)
+#ifdef CK01
             (get_content_replies)
             (get_tags_used_by_author)
             (get_post_discussions_by_payout)
@@ -119,14 +124,18 @@ namespace detail
             (get_recent_trades)
             (get_market_history)
             (get_market_history_buckets)
+#endif // CK01
          )
 
+#ifdef CK01
          void recursively_fetch_content( state& _state, tags::discussion& root, set<string>& referenced_accounts );
 
          void set_pending_payout( discussion& d );
+#endif // CK01
 
          chain::database& _db;
 
+#ifdef CK01
          std::shared_ptr< database_api::database_api > _database_api;
          std::shared_ptr< block_api::block_api > _block_api;
          std::shared_ptr< account_history::account_history_api > _account_history_api;
@@ -136,6 +145,7 @@ namespace detail
          std::shared_ptr< follow::follow_api > _follow_api;
          std::shared_ptr< market_history::market_history_api > _market_history_api;
          std::shared_ptr< witness::witness_api > _witness_api;
+#endif // CK01
    };
 
    DEFINE_API_IMPL( condenser_api_impl, get_version )
@@ -149,6 +159,7 @@ namespace detail
       );
    }
 
+#ifdef CK01
    DEFINE_API_IMPL( condenser_api_impl, get_trending_tags )
    {
       CHECK_ARG_SIZE( 2 )
@@ -1282,15 +1293,24 @@ namespace detail
 
       return result;
    }
+#endif // CK01
 
    DEFINE_API_IMPL( condenser_api_impl, get_content )
    {
       CHECK_ARG_SIZE( 2 )
+#ifdef CK01
       FC_ASSERT( _tags_api, "tags_api_plugin not enabled." );
-
       return discussion( _tags_api->get_discussion( { args[0].as< account_name_type >(), args[1].as< string >() } ) );
+#else
+      const auto found = _db.find_comment(args[0].as< account_name_type >(), args[1].as< string >());
+      if (found != nullptr) {
+        return discussion(*found, _db);
+      }
+      return discussion();
+#endif
    }
 
+#ifdef CK01
    DEFINE_API_IMPL( condenser_api_impl, get_content_replies )
    {
       CHECK_ARG_SIZE( 2 )
@@ -1863,6 +1883,7 @@ namespace detail
       if( root.id != d.id )
          d.url += "#@" + d.author + "/" + d.permlink;
    }
+#endif // CK01
 
 } // detail
 
@@ -1876,6 +1897,7 @@ condenser_api::~condenser_api() {}
 
 void condenser_api::api_startup()
 {
+#ifdef CK01
    auto database = appbase::app().find_plugin< database_api::database_api_plugin >();
    if( database != nullptr )
       my->_database_api = database->api;
@@ -1911,19 +1933,23 @@ void condenser_api::api_startup()
    auto witness = appbase::app().find_plugin< witness::witness_api_plugin >();
    if( witness != nullptr )
       my->_witness_api = witness->api;
+#endif // CK01
 }
 
 DEFINE_LOCKLESS_APIS( condenser_api,
    (get_version)
+#ifdef CK01
    (get_config)
    (get_account_references)
    (broadcast_transaction)
    (broadcast_transaction_synchronous)
    (broadcast_block)
    (get_market_history_buckets)
+#endif // CK01
 )
 
 DEFINE_READ_APIS( condenser_api,
+#ifdef CK01
    (get_trending_tags)
    (get_state)
    (get_active_witnesses)
@@ -1967,7 +1993,9 @@ DEFINE_READ_APIS( condenser_api,
    (verify_account_authority)
    (get_active_votes)
    (get_account_votes)
+#endif // CK01
    (get_content)
+#ifdef CK01
    (get_content_replies)
    (get_tags_used_by_author)
    (get_post_discussions_by_payout)
@@ -2002,6 +2030,7 @@ DEFINE_READ_APIS( condenser_api,
    (get_trade_history)
    (get_recent_trades)
    (get_market_history)
+#endif // CK01
 )
 
 } } } // steem::plugins::condenser_api

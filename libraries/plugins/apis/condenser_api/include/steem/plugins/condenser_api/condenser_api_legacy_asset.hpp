@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef CK01
 #include <steem/protocol/asset.hpp>
 
 namespace steem { namespace plugins { namespace condenser_api {
@@ -55,3 +55,4 @@ FC_REFLECT( steem::plugins::condenser_api::legacy_asset,
    (amount)
    (symbol)
    )
+#endif // CK01

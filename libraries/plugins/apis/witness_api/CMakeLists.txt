@@ -1,3 +1,4 @@
+if(CK01)
 file(GLOB HEADERS "include/steem/plugins/witness_api/*.hpp")
 add_library( witness_api_plugin
              witness_api_plugin.cpp
@@ -21,3 +22,4 @@ install( TARGETS
    LIBRARY DESTINATION lib
    ARCHIVE DESTINATION lib
 )
+endif(CK01)

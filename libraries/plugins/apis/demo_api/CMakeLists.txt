@@ -1,3 +1,4 @@
+if(CK01)
 file(GLOB HEADERS "include/steem/plugins/demo_api/*.hpp")
 add_library( demo_api_plugin
         demo_api.cpp
@@ -23,3 +24,4 @@ install( TARGETS
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib
         )
+endif(CK01)

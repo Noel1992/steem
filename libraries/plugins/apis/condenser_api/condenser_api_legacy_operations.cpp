@@ -1,3 +1,4 @@
+#ifdef CK01
 #include <steem/plugins/condenser_api/condenser_api_legacy_operations.hpp>
 
 #define LEGACY_PREFIX "legacy_"
@@ -83,3 +84,4 @@ void from_variant( const fc::variant& var, steem::plugins::condenser_api::legacy
 }
 
 } // fc
+#endif // CK01

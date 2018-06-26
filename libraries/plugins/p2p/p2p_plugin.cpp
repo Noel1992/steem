@@ -75,9 +75,9 @@ public:
    virtual ~p2p_plugin_impl() {}
 
    bool is_included_block(const block_id_type& block_id);
-   virtual steem::protocol::chain_id_type get_chain_id() const override;
 
    // node_delegate interface
+   virtual steem::protocol::chain_id_type get_chain_id() const override;
    virtual bool has_item( const graphene::net::item_id& ) override;
    virtual bool handle_block( const graphene::net::block_message&, bool, std::vector<fc::uint160_t>& ) override;
    virtual void handle_transaction( const graphene::net::trx_message& ) override;

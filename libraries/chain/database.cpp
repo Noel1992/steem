@@ -103,7 +103,9 @@ void database::open( const open_args& args )
 {
    try
    {
+#ifdef CK01
       init_schema();
+#endif
       chainbase::database::open( args.shared_mem_dir, args.chainbase_flags, args.shared_file_size );
 
       initialize_indexes();
@@ -2339,6 +2341,7 @@ const std::string& database::get_json_schema()const
    return _json_schema;
 }
 
+#ifdef CK01
 void database::init_schema()
 {
    /*done_adding_indexes();
@@ -2399,6 +2402,7 @@ void database::init_schema()
    _json_schema = fc::json::to_string( ds );
    return;*/
 }
+#endif // CK01
 
 void database::init_genesis( uint64_t init_supply )
 {

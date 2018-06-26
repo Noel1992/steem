@@ -15,6 +15,7 @@ using protocol::transaction_id_type;
 using protocol::public_key_type;
 using plugins::json_rpc::void_type;
 
+#ifdef CK01
 enum sort_order_type
 {
    by_name,
@@ -48,6 +49,7 @@ enum sort_order_type
    by_comment_weight_voter,
    by_price
 };
+#endif // CK01
 
 /* get_config */
 
@@ -63,6 +65,7 @@ typedef void_type                            get_dynamic_global_properties_args;
 typedef api_dynamic_global_property_object   get_dynamic_global_properties_return;
 
 
+#ifdef CK01
 /* get_witness_schedule */
 
 typedef void_type                   get_witness_schedule_args;
@@ -566,9 +569,11 @@ struct get_smt_next_identifier_return
    vector< asset_symbol_type > nais;
 };
 #endif
+#endif // CK01
 
 } } } // steem::database_api
 
+#ifdef CK01
 FC_REFLECT_ENUM( steem::plugins::database_api::sort_order_type,
    (by_name)
    (by_proxy)
@@ -793,3 +798,5 @@ FC_REFLECT( steem::plugins::database_api::verify_signatures_return,
 FC_REFLECT( steem::plugins::database_api::get_smt_next_identifier_return,
    (nais) )
 #endif
+
+#endif // CK01

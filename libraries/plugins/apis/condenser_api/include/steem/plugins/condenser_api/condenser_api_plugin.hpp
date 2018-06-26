@@ -1,7 +1,9 @@
 #pragma once
 #include <steem/plugins/json_rpc/json_rpc_plugin.hpp>
+#ifdef CK01
 #include <steem/plugins/database_api/database_api_plugin.hpp>
 #include <steem/plugins/block_api/block_api_plugin.hpp>
+#endif // CK01
 
 #define STEEM_CONDENSER_API_PLUGIN_NAME "condenser_api"
 
@@ -12,7 +14,12 @@ using namespace appbase;
 class condenser_api_plugin : public appbase::plugin< condenser_api_plugin >
 {
 public:
-   APPBASE_PLUGIN_REQUIRES( (steem::plugins::json_rpc::json_rpc_plugin)(steem::plugins::database_api::database_api_plugin) )
+   APPBASE_PLUGIN_REQUIRES(
+   (steem::plugins::json_rpc::json_rpc_plugin)
+#ifdef CK01
+   (steem::plugins::database_api::database_api_plugin)
+#endif // CK01
+   )
 
    condenser_api_plugin();
    virtual ~condenser_api_plugin();

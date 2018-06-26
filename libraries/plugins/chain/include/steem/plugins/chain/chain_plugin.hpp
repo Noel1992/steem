@@ -32,7 +32,9 @@ public:
    bool accept_block( const steem::chain::signed_block& block, bool currently_syncing, uint32_t skip );
    void accept_transaction( const steem::chain::signed_transaction& trx );
 
+#ifdef CK01
    bool block_is_on_preferred_chain( const steem::chain::block_id_type& block_id );
+#endif // CK01
 
    void check_time_in_block( const steem::chain::signed_block& block );
 

@@ -1,3 +1,4 @@
+if(CK01)
 file(GLOB HEADERS "include/steem/plugins/tags/*.hpp")
 
 add_library( tags_plugin
@@ -21,3 +22,4 @@ install( TARGETS
    LIBRARY DESTINATION lib
    ARCHIVE DESTINATION lib
 )
+endif(CK01)

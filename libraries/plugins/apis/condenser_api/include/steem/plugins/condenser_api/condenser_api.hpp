@@ -1,5 +1,6 @@
 #pragma once
 
+#ifdef CK01
 #include <steem/plugins/database_api/database_api.hpp>
 #include <steem/plugins/block_api/block_api.hpp>
 #include <steem/plugins/account_history_api/account_history_api.hpp>
@@ -9,9 +10,15 @@
 #include <steem/plugins/follow_api/follow_api.hpp>
 #include <steem/plugins/market_history_api/market_history_api.hpp>
 #include <steem/plugins/witness_api/witness_api.hpp>
-
 #include <steem/plugins/condenser_api/condenser_api_legacy_objects.hpp>
+#endif // CK01
 
+#include <steem/plugins/chain/chain_plugin.hpp>
+#include <steem/plugins/json_rpc/utility.hpp>
+#include <steem/chain/comment_object.hpp>
+#include <steem/chain/steem_object_types.hpp>
+#include <steem/chain/database.hpp>
+#include <steem/protocol/steem_operations.hpp>
 #include <fc/optional.hpp>
 #include <fc/variant.hpp>
 #include <fc/vector.hpp>
@@ -24,9 +31,11 @@ using fc::variant;
 using fc::optional;
 
 using namespace chain;
+using namespace protocol;
 
 namespace detail{ class condenser_api_impl; }
 
+#ifdef CK01
 struct discussion_index
 {
    string           category;         /// category by which everything is filtered
@@ -575,10 +584,12 @@ struct api_convert_request_object
    legacy_asset      amount;
    time_point_sec    conversion_date;
 };
+#endif // CK01
 
 struct discussion
 {
    discussion() {}
+#ifdef CK01
    discussion( const tags::discussion& d ) :
       id( d.id ),
       category( d.category ),
@@ -628,7 +639,50 @@ struct discussion
       first_reblogged_by( d.first_reblogged_by ),
       first_reblogged_on( d.first_reblogged_on )
    {}
-
+#else // CK01
+  discussion( const comment_object& o, const database& db ) :
+        id(o.id)
+        , category(to_string(o.category))
+        , parent_author(o.parent_author)
+        , parent_permlink(to_string(o.parent_permlink))
+        , author(o.author)
+        , permlink(to_string(o.permlink))
+        , last_update(o.last_update)
+        , created(o.created)
+        , active(o.active)
+        , last_payout(o.last_payout)
+        , depth(o.depth)
+        , children(o.children)
+        , net_rshares(o.net_rshares)
+        , abs_rshares(o.abs_rshares)
+        , vote_rshares(o.vote_rshares)
+        , children_abs_rshares(o.children_abs_rshares)
+        , cashout_time(o.cashout_time)
+        , max_cashout_time(o.max_cashout_time)
+        , total_vote_weight(o.total_vote_weight)
+        , reward_weight(o.reward_weight)
+        , author_rewards(o.author_rewards)
+        , net_votes(o.net_votes)
+        , percent_steem_dollars(o.percent_steem_dollars)
+        , allow_replies(o.allow_replies)
+        , allow_votes(o.allow_votes)
+        , allow_curation_rewards(o.allow_curation_rewards)
+  {
+    for (const auto & b : o.beneficiaries)
+      beneficiaries.push_back(b);
+    const auto root = db.find(o.root_comment);
+    if (root != nullptr) {
+      root_author = root->author;
+      root_permlink = to_string(root->permlink);
+    }
+#ifndef IS_LOW_MEM
+    const auto& con = db.get< chain::comment_content_object, chain::by_comment >(o.id);
+    title = to_string(con.title);
+    body = to_string(con.body);
+    json_metadata = to_string(con.json_metadata);
+#endif
+  }
+#endif // CK01
 
    comment_id_type   id;
    string            category;
@@ -658,9 +712,10 @@ struct discussion
    uint64_t          total_vote_weight = 0;
 
    uint16_t          reward_weight = 0;
-
+#ifdef CK01
    legacy_asset      total_payout_value;
    legacy_asset      curator_payout_value;
+#endif // CK01
 
    share_type        author_rewards;
 
@@ -669,7 +724,9 @@ struct discussion
    account_name_type root_author;
    string            root_permlink;
 
+#ifdef CK01
    legacy_asset      max_accepted_payout;
+#endif
    uint16_t          percent_steem_dollars = 0;
    bool              allow_replies = false;
    bool              allow_votes = false;
@@ -678,17 +735,22 @@ struct discussion
 
    string                        url; /// /category/@rootauthor/root_permlink#author/permlink
    string                        root_title;
+#ifdef CK01
    legacy_asset                  pending_payout_value; ///< sbd
    legacy_asset                  total_pending_payout_value; ///< sbd including replies
    vector< tags::vote_state >    active_votes;
+#endif // CK01
    vector< string >              replies; ///< author/slug mapping
    share_type                    author_reputation = 0;
+#ifdef CK01
    legacy_asset                  promoted;
+#endif // CK01
    uint32_t                      body_length = 0;
    vector< account_name_type >   reblogged_by;
    optional< account_name_type > first_reblogged_by;
    optional< time_point_sec >    first_reblogged_on;
 };
+#ifdef CK01
 
 struct tag_index
 {
@@ -763,6 +825,7 @@ enum withdraw_route_type
    outgoing,
    all
 };
+#endif // CK01
 
 typedef vector< variant > get_version_args;
 
@@ -776,6 +839,7 @@ struct get_version_return
    fc::string steem_revision;
    fc::string fc_revision;
 };
+#ifdef CK01
 
 typedef map< uint32_t, api_operation_object > get_account_history_return_type;
 
@@ -855,12 +919,14 @@ struct market_trade
    legacy_asset   current_pays;
    legacy_asset   open_pays;
 };
+#endif // CK01
 
 #define DEFINE_API_ARGS( api_name, arg_type, return_type )  \
 typedef arg_type api_name ## _args;                         \
 typedef return_type api_name ## _return;
 
 /*               API,                                    args,                return */
+#ifdef CK01
 DEFINE_API_ARGS( get_trending_tags,                      vector< variant >,   vector< api_tag_object > )
 DEFINE_API_ARGS( get_state,                              vector< variant >,   state )
 DEFINE_API_ARGS( get_active_witnesses,                   vector< variant >,   vector< account_name_type > )
@@ -906,7 +972,9 @@ DEFINE_API_ARGS( verify_authority,                       vector< variant >,   bo
 DEFINE_API_ARGS( verify_account_authority,               vector< variant >,   bool )
 DEFINE_API_ARGS( get_active_votes,                       vector< variant >,   vector< tags::vote_state > )
 DEFINE_API_ARGS( get_account_votes,                      vector< variant >,   vector< account_vote > )
+#endif // CK01
 DEFINE_API_ARGS( get_content,                            vector< variant >,   discussion )
+#ifdef CK01
 DEFINE_API_ARGS( get_content_replies,                    vector< variant >,   vector< discussion > )
 DEFINE_API_ARGS( get_tags_used_by_author,                vector< variant >,   vector< tags::tag_count_object > )
 DEFINE_API_ARGS( get_post_discussions_by_payout,         vector< variant >,   vector< discussion > )
@@ -945,7 +1013,7 @@ DEFINE_API_ARGS( get_trade_history,                      vector< variant >,   ve
 DEFINE_API_ARGS( get_recent_trades,                      vector< variant >,   vector< market_trade > )
 DEFINE_API_ARGS( get_market_history,                     vector< variant >,   vector< market_history::bucket_object > )
 DEFINE_API_ARGS( get_market_history_buckets,             vector< variant >,   flat_set< uint32_t > )
-
+#endif // CK01
 #undef DEFINE_API_ARGS
 
 class condenser_api
@@ -956,6 +1024,7 @@ public:
 
    DECLARE_API(
       (get_version)
+#ifdef CK01
       (get_trending_tags)
       (get_state)
       (get_active_witnesses)
@@ -1001,7 +1070,9 @@ public:
       (verify_account_authority)
       (get_active_votes)
       (get_account_votes)
+#endif // CK01
       (get_content)
+#ifdef CK01
       (get_content_replies)
       (get_tags_used_by_author)
       (get_post_discussions_by_payout)
@@ -1040,6 +1111,7 @@ public:
       (get_recent_trades)
       (get_market_history)
       (get_market_history_buckets)
+#endif // CK01
    )
 
    private:
@@ -1051,6 +1123,7 @@ public:
 
 } } } // steem::plugins::condenser_api
 
+#ifdef CK01
 FC_REFLECT( steem::plugins::condenser_api::discussion_index,
             (category)(trending)(payout)(payout_comments)(trending30)(updated)(created)(responses)(active)(votes)(maturing)(best)(hot)(promoted)(cashout) )
 
@@ -1202,9 +1275,11 @@ FC_REFLECT( steem::plugins::condenser_api::tag_index, (trending) )
 
 FC_REFLECT_ENUM( steem::plugins::condenser_api::withdraw_route_type, (incoming)(outgoing)(all) )
 
+#endif // CK01
 FC_REFLECT( steem::plugins::condenser_api::get_version_return,
             (blockchain_version)(steem_revision)(fc_revision) )
 
+#ifdef CK01
 FC_REFLECT( steem::plugins::condenser_api::ticker,
             (latest)(lowest_ask)(highest_bid)(percent_change)(steem_volume)(sbd_volume) )
 
@@ -1219,3 +1294,20 @@ FC_REFLECT( steem::plugins::condenser_api::order_book,
 
 FC_REFLECT( steem::plugins::condenser_api::market_trade,
             (date)(current_pays)(open_pays) )
+#else // CK01
+FC_REFLECT( steem::plugins::condenser_api::discussion,
+            (id)(author)(permlink)
+                (category)(parent_author)(parent_permlink)
+                (title)(body)(json_metadata)(last_update)(created)(active)(last_payout)
+                (depth)(children)
+                (net_rshares)(abs_rshares)(vote_rshares)
+                (children_abs_rshares)(cashout_time)(max_cashout_time)
+                (total_vote_weight)(reward_weight)(author_rewards)(net_votes)
+                (root_author)(root_permlink)
+                (percent_steem_dollars)(allow_replies)(allow_votes)(allow_curation_rewards)
+                (beneficiaries)
+                (url)(root_title)
+                (replies)(author_reputation)
+                (body_length)(reblogged_by)(first_reblogged_by)(first_reblogged_on)
+)
+#endif // CK01

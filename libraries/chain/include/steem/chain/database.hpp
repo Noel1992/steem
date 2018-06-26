@@ -389,7 +389,9 @@ namespace steem { namespace chain {
 
          /// Reset the object graph in-memory
          void initialize_indexes();
+#ifdef CK01
          void init_schema();
+#endif
          void init_genesis(uint64_t initial_supply = STEEM_INIT_SUPPLY );
 
          /**

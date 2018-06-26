@@ -1,3 +1,4 @@
+if(CK01)
 file(GLOB HEADERS "include/steem/plugins/smt_test/*.hpp")
 
 add_library( smt_test_plugin
@@ -15,3 +16,4 @@ install( TARGETS
    LIBRARY DESTINATION lib
    ARCHIVE DESTINATION lib
 )
+endif(CK01)

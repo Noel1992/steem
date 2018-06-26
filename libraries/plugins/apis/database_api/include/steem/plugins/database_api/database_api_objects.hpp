@@ -14,9 +14,12 @@ namespace steem { namespace plugins { namespace database_api {
 
 using namespace steem::chain;
 
+#ifdef CK01
 typedef change_recovery_account_request_object api_change_recovery_account_request_object;
 typedef block_summary_object                   api_block_summary_object;
+#endif // CK01
 typedef dynamic_global_property_object         api_dynamic_global_property_object;
+#ifdef CK01
 typedef convert_request_object                 api_convert_request_object;
 typedef escrow_object                          api_escrow_object;
 typedef liquidity_reward_balance_object        api_liquidity_reward_balance_object;
@@ -528,9 +531,11 @@ struct order_book
    vector< order >      asks;
    vector< order >      bids;
 };
+#endif // CK01
 
 } } } // steem::plugins::database_api
 
+#ifdef CK01
 FC_REFLECT( steem::plugins::database_api::api_comment_object,
              (id)(author)(permlink)
              (category)(parent_author)(parent_permlink)
@@ -645,3 +650,4 @@ FC_REFLECT( steem::plugins::database_api::api_hardfork_property_object,
 FC_REFLECT( steem::plugins::database_api::order, (order_price)(real_price)(steem)(sbd)(created) );
 
 FC_REFLECT( steem::plugins::database_api::order_book, (asks)(bids) );
+#endif // CK01

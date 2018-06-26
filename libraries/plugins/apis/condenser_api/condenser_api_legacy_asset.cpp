@@ -1,3 +1,4 @@
+#ifdef CK01
 #include <steem/plugins/condenser_api/condenser_api_legacy_asset.hpp>
 
 namespace steem { namespace plugins { namespace condenser_api {
@@ -176,3 +177,4 @@ legacy_asset legacy_asset::from_string( const string& from )
 }
 
 } } }
+#endif // CK01

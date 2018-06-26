@@ -19,6 +19,7 @@ class database_api_impl
       (
          (get_config)
          (get_dynamic_global_properties)
+#ifdef CK01
          (get_witness_schedule)
          (get_hardfork_properties)
          (get_reward_funds)
@@ -66,6 +67,7 @@ class database_api_impl
 #ifdef STEEM_ENABLE_SMT
          (get_smt_next_identifier)
 #endif
+#endif // CK01
       )
 
       template< typename ResultType >
@@ -124,6 +126,7 @@ DEFINE_API_IMPL( database_api_impl, get_dynamic_global_properties )
    return _db.get_dynamic_global_properties();
 }
 
+#ifdef CK01
 DEFINE_API_IMPL( database_api_impl, get_witness_schedule )
 {
    return api_witness_schedule_object( _db.get_witness_schedule_object() );
@@ -1482,11 +1485,13 @@ DEFINE_API_IMPL( database_api_impl, get_smt_next_identifier )
    return result;
 }
 #endif
+#endif // CK01
 
 DEFINE_LOCKLESS_APIS( database_api, (get_config) )
 
 DEFINE_READ_APIS( database_api,
    (get_dynamic_global_properties)
+#ifdef CK01
    (get_witness_schedule)
    (get_hardfork_properties)
    (get_reward_funds)
@@ -1534,6 +1539,7 @@ DEFINE_READ_APIS( database_api,
 #ifdef STEEM_ENABLE_SMT
    (get_smt_next_identifier)
 #endif
+#endif // CK01
 )
 
 } } } // steem::plugins::database_api

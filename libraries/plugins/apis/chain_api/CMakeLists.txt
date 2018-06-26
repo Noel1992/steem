@@ -1,3 +1,4 @@
+if(CK01)
 file( GLOB HEADERS "include/steem/plugins/chain_api/*.hpp" )
 set( SOURCES chain_api.cpp chain_api_plugin.cpp )
 
@@ -20,3 +21,4 @@ install( TARGETS
    LIBRARY DESTINATION lib
    ARCHIVE DESTINATION lib
 )
+endif(CK01)

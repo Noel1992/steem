@@ -499,6 +499,7 @@ void chain_plugin::accept_transaction( const steem::chain::signed_transaction& t
    return;
 }
 
+#ifdef CK01
 bool chain_plugin::block_is_on_preferred_chain(const steem::chain::block_id_type& block_id )
 {
    // If it's not known, it's not preferred.
@@ -508,6 +509,7 @@ bool chain_plugin::block_is_on_preferred_chain(const steem::chain::block_id_type
    // If the database's block ID matches block_id, then block_id is on the preferred chain. Otherwise, it's on a fork.
    return db().get_block_id_for_num( steem::chain::block_header::num_from_id( block_id ) ) == block_id;
 }
+#endif // CK01
 
 void chain_plugin::check_time_in_block( const steem::chain::signed_block& block )
 {

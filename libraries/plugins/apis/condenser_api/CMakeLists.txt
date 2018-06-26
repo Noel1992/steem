@@ -1,4 +1,5 @@
 file(GLOB HEADERS "include/steem/condenser_api_plugin/*.hpp")
+if( CK01 )
 add_library( condenser_api_plugin
              condenser_api.cpp
              condenser_api_plugin.cpp
@@ -17,6 +18,16 @@ target_link_libraries( condenser_api_plugin
    tags_api_plugin
    witness_api_plugin
    steem_utilities )
+else( CK01 )
+add_library( condenser_api_plugin
+             condenser_api.cpp
+             condenser_api_plugin.cpp
+             ${HEADERS} )
+
+target_link_libraries( condenser_api_plugin
+   steem_utilities json_rpc_plugin chain_plugin)
+endif( CK01 )
+
 target_include_directories( condenser_api_plugin PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include" )
 
 if( CLANG_TIDY_EXE )

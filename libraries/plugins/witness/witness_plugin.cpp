@@ -53,12 +53,15 @@ namespace detail {
       witness_plugin_impl( boost::asio::io_service& io ) :
          _timer(io),
          _db( appbase::app().get_plugin< steem::plugins::chain::chain_plugin >().db() ) {}
-
+#ifdef CK01
       void pre_transaction( const steem::protocol::signed_transaction& trx );
       void pre_operation( const chain::operation_notification& note );
+#endif // CK01
       void on_block( const signed_block& b );
 
+#ifdef CK01
       void update_account_bandwidth( const chain::account_object& a, uint32_t trx_size, const bandwidth_type type );
+#endif // CK01
 
       void schedule_production_loop();
       block_production_condition::block_production_condition_enum block_production_loop();
@@ -73,11 +76,14 @@ namespace detail {
       boost::asio::deadline_timer                                          _timer;
 
       chain::database&     _db;
-      boost::signals2::connection   pre_apply_connection;
       boost::signals2::connection   applied_block_connection;
+#ifdef CK01
+      boost::signals2::connection   pre_apply_connection;
       boost::signals2::connection   on_pre_apply_transaction_connection;
+#endif // CK01
    };
 
+#ifdef CK01
    struct comment_options_extension_visitor
    {
       comment_options_extension_visitor( const comment_object& c, const database& db ) : _c( c ), _db( db ) {}
@@ -247,6 +253,7 @@ namespace detail {
          note.op.visit( operation_visitor( _db ) );
       }
    }
+#endif // CK01
 
    void witness_plugin_impl::on_block( const signed_block& b )
    { try {
@@ -324,6 +331,7 @@ namespace detail {
    } FC_LOG_AND_RETHROW() }
    #pragma message( "Remove FC_LOG_AND_RETHROW here before appbase release. It exists to help debug a rare lock exception" )
 
+#ifdef CK01
    void witness_plugin_impl::update_account_bandwidth( const chain::account_object& a, uint32_t trx_size, const bandwidth_type type )
    {
       const auto& props = _db.get_dynamic_global_properties();
@@ -378,6 +386,7 @@ namespace detail {
                ("total_vesting_shares", total_vshares) );
       }
    }
+#endif // CK01
 
    void witness_plugin_impl::schedule_production_loop() {
       //Schedule for the next second's tick regardless of chain state
@@ -581,8 +590,10 @@ void witness_plugin::plugin_initialize(const boost::program_options::variables_m
       my->_required_witness_participation = STEEM_1_PERCENT * options.at( "required-participation" ).as< uint32_t >();
    }
 
+#ifdef CK01
    my->on_pre_apply_transaction_connection = my->_db.on_pre_apply_transaction.connect( 0, [&]( const signed_transaction& tx ){ my->pre_transaction( tx ); } );
    my->pre_apply_connection = my->_db.pre_apply_operation.connect( 0, [&]( const operation_notification& note ){ my->pre_operation( note ); } );
+#endif // CK01
    my->applied_block_connection = my->_db.applied_block.connect( 0, [&]( const signed_block& b ){ my->on_block( b ); } );
 
    add_plugin_index< account_bandwidth_index >( my->_db );
@@ -615,9 +626,11 @@ void witness_plugin::plugin_shutdown()
 {
    try
    {
-      chain::util::disconnect_signal( my->pre_apply_connection );
       chain::util::disconnect_signal( my->applied_block_connection );
+#ifdef CK01
+      chain::util::disconnect_signal( my->pre_apply_connection );
       chain::util::disconnect_signal( my->on_pre_apply_transaction_connection );
+#endif
 
       my->_timer.cancel();
    }

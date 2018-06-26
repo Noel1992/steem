@@ -1,3 +1,5 @@
+#pragma once
+#ifdef CK01
 #include <steem/protocol/operations.hpp>
 #include <steem/plugins/condenser_api/condenser_api_legacy_asset.hpp>
 
@@ -1365,3 +1367,4 @@ FC_REFLECT( steem::plugins::condenser_api::legacy_comment_benefactor_reward_oper
 FC_REFLECT( steem::plugins::condenser_api::legacy_producer_reward_operation, (producer)(vesting_shares) )
 
 FC_REFLECT_TYPENAME( steem::plugins::condenser_api::legacy_operation )
+#endif // CK01

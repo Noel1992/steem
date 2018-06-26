@@ -1,4 +1,5 @@
 #pragma once
+#ifdef CK01
 #include <steem/plugins/condenser_api/condenser_api_legacy_operations.hpp>
 
 #include <steem/plugins/block_api/block_api_objects.hpp>
@@ -117,3 +118,4 @@ FC_REFLECT( steem::plugins::condenser_api::legacy_signed_transaction,
 
 FC_REFLECT( steem::plugins::condenser_api::legacy_signed_block,
             (previous)(timestamp)(witness)(transaction_merkle_root)(extensions)(witness_signature)(transactions)(block_id)(signing_key)(transaction_ids) )
+#endif // CK01

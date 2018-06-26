@@ -11,6 +11,7 @@ Makefile
 compile_commands.json
 moc_*
 *.moc
+*.patch
 hardfork.hpp
 
 lcov
