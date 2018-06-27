@@ -1,3 +1,4 @@
+if( CK01 )
 file(GLOB HEADERS "include/steem/plugins/block_api/*.hpp")
 
 add_library( block_api_plugin
@@ -23,3 +24,4 @@ install( TARGETS
    LIBRARY DESTINATION lib
    ARCHIVE DESTINATION lib
 )
+endif( CK01 )

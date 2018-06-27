@@ -584,6 +584,23 @@ struct api_convert_request_object
    legacy_asset      amount;
    time_point_sec    conversion_date;
 };
+#else
+struct api_signed_block_object : public signed_block
+{
+  api_signed_block_object( const signed_block& block ) : signed_block( block )
+  {
+        block_id = id();
+        signing_key = signee();
+        transaction_ids.reserve( transactions.size() );
+        for( const signed_transaction& tx : transactions )
+              transaction_ids.push_back( tx.id() );
+  }
+  api_signed_block_object() {}
+
+  block_id_type                 block_id;
+  public_key_type               signing_key;
+  vector< transaction_id_type > transaction_ids;
+};
 #endif // CK01
 
 struct discussion
@@ -932,6 +949,10 @@ DEFINE_API_ARGS( get_state,                              vector< variant >,   st
 DEFINE_API_ARGS( get_active_witnesses,                   vector< variant >,   vector< account_name_type > )
 DEFINE_API_ARGS( get_block_header,                       vector< variant >,   optional< block_header > )
 DEFINE_API_ARGS( get_block,                              vector< variant >,   optional< legacy_signed_block > )
+#else
+DEFINE_API_ARGS( get_block,                              vector< variant >,   optional< api_signed_block_object > )
+#endif // CK01
+#ifdef CK01
 DEFINE_API_ARGS( get_ops_in_block,                       vector< variant >,   vector< api_operation_object > )
 DEFINE_API_ARGS( get_config,                             vector< variant >,   fc::variant_object )
 DEFINE_API_ARGS( get_dynamic_global_properties,          vector< variant >,   extended_dynamic_global_properties )
@@ -1029,7 +1050,9 @@ public:
       (get_state)
       (get_active_witnesses)
       (get_block_header)
+#endif // CK01
       (get_block)
+#ifdef CK01
       (get_ops_in_block)
       (get_config)
       (get_dynamic_global_properties)
@@ -1309,5 +1332,8 @@ FC_REFLECT( steem::plugins::condenser_api::discussion,
                 (url)(root_title)
                 (replies)(author_reputation)
                 (body_length)(reblogged_by)(first_reblogged_by)(first_reblogged_on)
+)
+FC_REFLECT_DERIVED( steem::plugins::condenser_api::api_signed_block_object, (steem::protocol::signed_block),
+                    (block_id)(signing_key)(transaction_ids)
 )
 #endif // CK01

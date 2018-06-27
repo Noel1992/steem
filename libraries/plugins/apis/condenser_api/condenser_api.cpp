@@ -42,7 +42,9 @@ namespace detail
             (get_state)
             (get_active_witnesses)
             (get_block_header)
+#endif // CK01
             (get_block)
+#ifdef CK01
             (get_ops_in_block)
             (get_config)
             (get_dynamic_global_properties)
@@ -705,9 +707,11 @@ namespace detail
       return _block_api->get_block_header( { args[0].as< uint32_t >() } ).header;
    }
 
+#endif // CK01
    DEFINE_API_IMPL( condenser_api_impl, get_block )
    {
       CHECK_ARG_SIZE( 1 )
+#ifdef CK01
       FC_ASSERT( _block_api, "block_api_plugin not enabled." );
       get_block_return result;
       auto b = _block_api->get_block( { args[0].as< uint32_t >() } ).block;
@@ -716,8 +720,13 @@ namespace detail
          result = legacy_signed_block( *b );
 
       return result;
+#else
+     get_block_return result = _db.fetch_block_by_number( args[0].as< uint32_t >() );
+     return result;
+#endif // CK01
    }
 
+#ifdef CK01
    DEFINE_API_IMPL( condenser_api_impl, get_ops_in_block )
    {
       FC_ASSERT( args.size() == 1 || args.size() == 2, "Expected 1-2 arguments, was ${n}", ("n", args.size()) );
@@ -1954,7 +1963,9 @@ DEFINE_READ_APIS( condenser_api,
    (get_state)
    (get_active_witnesses)
    (get_block_header)
+#endif // CK01
    (get_block)
+#ifdef CK01
    (get_ops_in_block)
    (get_dynamic_global_properties)
    (get_chain_properties)
