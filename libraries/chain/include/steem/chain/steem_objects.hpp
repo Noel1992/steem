@@ -209,7 +209,7 @@ namespace steem { namespace chain {
          asset amount_to_receive()const { return amount_for_sale() * sell_price; }
    };
 
-
+#ifdef CK01
    /**
     * @breif a route to send withdrawn vesting shares.
     */
@@ -231,6 +231,7 @@ namespace steem { namespace chain {
          uint16_t          percent = 0;
          bool              auto_vest = false;
    };
+#endif // CK01
 
 
    class decline_voting_rights_request_object : public object< decline_voting_rights_request_object_type, decline_voting_rights_request_object >
@@ -273,6 +274,7 @@ namespace steem { namespace chain {
          protocol::curve_id                curation_reward_curve;
    };
 
+#ifdef CK01
    struct by_price;
    struct by_expiration;
    struct by_account;
@@ -297,6 +299,7 @@ namespace steem { namespace chain {
       >,
       allocator< limit_order_object >
    > limit_order_index;
+#endif // CK01
 
    struct by_owner;
    struct by_conversion_date;
@@ -347,6 +350,7 @@ namespace steem { namespace chain {
       allocator< feed_history_object >
    > feed_history_index;
 
+#ifdef CK01
    struct by_withdraw_route;
    struct by_destination;
    typedef multi_index_container<
@@ -369,6 +373,7 @@ namespace steem { namespace chain {
       >,
       allocator< withdraw_vesting_route_object >
    > withdraw_vesting_route_index;
+#endif // CK01
 
    struct by_from_id;
    struct by_ratification_deadline;
@@ -460,9 +465,11 @@ namespace steem { namespace chain {
 #include <steem/chain/comment_object.hpp>
 #include <steem/chain/account_object.hpp>
 
+#ifdef CK01
 FC_REFLECT( steem::chain::limit_order_object,
              (id)(created)(expiration)(seller)(orderid)(for_sale)(sell_price) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::limit_order_object, steem::chain::limit_order_index )
+#endif // CK01
 
 FC_REFLECT( steem::chain::feed_history_object,
              (id)(current_median_history)(price_history) )
@@ -476,9 +483,11 @@ FC_REFLECT( steem::chain::liquidity_reward_balance_object,
              (id)(owner)(steem_volume)(sbd_volume)(weight)(last_update) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::liquidity_reward_balance_object, steem::chain::liquidity_reward_balance_index )
 
+#ifdef CK01
 FC_REFLECT( steem::chain::withdraw_vesting_route_object,
              (id)(from_account)(to_account)(percent)(auto_vest) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::withdraw_vesting_route_object, steem::chain::withdraw_vesting_route_index )
+#endif // CK01
 
 FC_REFLECT( steem::chain::savings_withdraw_object,
              (id)(from)(to)(memo)(request_id)(amount)(complete) )

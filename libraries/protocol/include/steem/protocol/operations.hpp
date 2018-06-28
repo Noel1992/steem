@@ -18,12 +18,14 @@ namespace steem { namespace protocol {
 #endif // CK01
             comment_operation,
 
+#ifdef CK01
             transfer_operation,
             transfer_to_vesting_operation,
             withdraw_vesting_operation,
 
             limit_order_create_operation,
             limit_order_cancel_operation,
+#endif // CK01
 
             feed_publish_operation,
             convert_operation,
@@ -44,8 +46,10 @@ namespace steem { namespace protocol {
             delete_comment_operation,
             custom_json_operation,
             comment_options_operation,
+#ifdef CK01
             set_withdraw_vesting_route_operation,
             limit_order_create2_operation,
+#endif // CK01
             placeholder_a_operation,               // A new op can go here
             placeholder_b_operation,               // A new op can go here
             request_account_recovery_operation,

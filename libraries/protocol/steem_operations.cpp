@@ -154,7 +154,6 @@ namespace steem { namespace protocol {
       FC_ASSERT( abs(weight) <= STEEM_100_PERCENT, "Weight is not a STEEMIT percentage" );
       validate_permlink( permlink );
    }
-#endif // CK01
 
    void transfer_operation::validate() const
    { try {
@@ -186,6 +185,7 @@ namespace steem { namespace protocol {
       validate_account_name( to_account );
       FC_ASSERT( 0 <= percent && percent <= STEEM_100_PERCENT, "Percent must be valid steem percent" );
    }
+#endif // CK01
 
    void witness_update_operation::validate() const
    {
@@ -434,6 +434,7 @@ namespace steem { namespace protocol {
       exchange_rate.validate();
    }
 
+#ifdef CK01
    void limit_order_create_operation::validate()const
    {
       validate_account_name( owner );
@@ -479,6 +480,7 @@ namespace steem { namespace protocol {
    {
       validate_account_name( owner );
    }
+#endif // CK01
 
    void convert_operation::validate()const
    {

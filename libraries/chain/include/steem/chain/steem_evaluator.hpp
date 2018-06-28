@@ -11,13 +11,17 @@ using namespace steem::protocol;
 STEEM_DEFINE_EVALUATOR( account_create )
 STEEM_DEFINE_EVALUATOR( account_create_with_delegation )
 STEEM_DEFINE_EVALUATOR( account_update )
+#ifdef CK01
 STEEM_DEFINE_EVALUATOR( transfer )
 STEEM_DEFINE_EVALUATOR( transfer_to_vesting )
+#endif // CK01
 STEEM_DEFINE_EVALUATOR( witness_update )
 STEEM_DEFINE_EVALUATOR( account_witness_vote )
 STEEM_DEFINE_EVALUATOR( account_witness_proxy )
+#ifdef CK01
 STEEM_DEFINE_EVALUATOR( withdraw_vesting )
 STEEM_DEFINE_EVALUATOR( set_withdraw_vesting_route )
+#endif // CK01
 STEEM_DEFINE_EVALUATOR( comment )
 STEEM_DEFINE_EVALUATOR( comment_options )
 STEEM_DEFINE_EVALUATOR( delete_comment )
@@ -31,10 +35,14 @@ STEEM_DEFINE_EVALUATOR( pow )
 STEEM_DEFINE_EVALUATOR( pow2 )
 STEEM_DEFINE_EVALUATOR( feed_publish )
 STEEM_DEFINE_EVALUATOR( convert )
+#ifdef CK01
 STEEM_DEFINE_EVALUATOR( limit_order_create )
 STEEM_DEFINE_EVALUATOR( limit_order_cancel )
+#endif // CK01
 STEEM_DEFINE_EVALUATOR( report_over_production )
+#ifdef CK01
 STEEM_DEFINE_EVALUATOR( limit_order_create2 )
+#endif // CK01
 STEEM_DEFINE_EVALUATOR( escrow_transfer )
 STEEM_DEFINE_EVALUATOR( escrow_approve )
 STEEM_DEFINE_EVALUATOR( escrow_dispute )

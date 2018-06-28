@@ -92,7 +92,9 @@ class liquidity_reward_balance_object;
 class operation_object;
 class account_history_object;
 class hardfork_property_object;
+#ifdef CK01
 class withdraw_vesting_route_object;
+#endif // CK01
 class owner_authority_history_object;
 class account_recovery_request_object;
 class change_recovery_account_request_object;
@@ -131,7 +133,9 @@ typedef oid< liquidity_reward_balance_object        > liquidity_reward_balance_i
 typedef oid< operation_object                       > operation_id_type;
 typedef oid< account_history_object                 > account_history_id_type;
 typedef oid< hardfork_property_object               > hardfork_property_id_type;
+#ifdef CK01
 typedef oid< withdraw_vesting_route_object          > withdraw_vesting_route_id_type;
+#endif // CK01
 typedef oid< owner_authority_history_object         > owner_authority_history_id_type;
 typedef oid< account_recovery_request_object        > account_recovery_request_id_type;
 typedef oid< change_recovery_account_request_object > change_recovery_account_request_id_type;

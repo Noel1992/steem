@@ -343,8 +343,10 @@ namespace steem { namespace chain {
           * adjust_proxied_witness_votes( a, -a.witness_vote_weight() )
           */
          void clear_witness_votes( const account_object& a );
+#ifdef CK01
          void process_vesting_withdrawals();
          share_type pay_curators( const comment_object& c, share_type& max_rewards );
+#endif // CK01
          share_type cashout_comment_helper( util::comment_reward_context& ctx, const comment_object& comment );
          void process_comment_cashout();
          void process_funds();
@@ -407,10 +409,12 @@ namespace steem { namespace chain {
          std::deque< signed_transaction >       _popped_tx;
          vector< signed_transaction >           _pending_tx;
 
+#ifdef CK01
          bool apply_order( const limit_order_object& new_order_object );
          bool fill_order( const limit_order_object& order, const asset& pays, const asset& receives );
          void cancel_order( const limit_order_object& obj );
          int  match( const limit_order_object& bid, const limit_order_object& ask, const price& trade_price );
+#endif // CK01
 
          void perform_vesting_share_split( uint32_t magnitude );
          void retally_comment_children();
@@ -490,7 +494,9 @@ namespace steem { namespace chain {
          void update_signing_witness(const witness_object& signing_witness, const signed_block& new_block);
          void update_last_irreversible_block();
          void clear_expired_transactions();
+         #ifdef CK01
          void clear_expired_orders();
+         #endif // CK01
          void clear_expired_delegations();
          void process_header_extensions( const signed_block& next_block );
 

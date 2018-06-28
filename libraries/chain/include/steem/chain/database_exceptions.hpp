@@ -91,7 +91,9 @@ namespace steem { namespace chain {
 
    FC_DECLARE_DERIVED_EXCEPTION( pop_empty_chain,                   steem::chain::undo_database_exception, 4070001, "there are no blocks to pop" )
 
+#ifdef CK01
    STEEM_DECLARE_OP_BASE_EXCEPTIONS( transfer );
+#endif // CK01
 //   STEEM_DECLARE_OP_EVALUATE_EXCEPTION( from_account_not_whitelisted, transfer, 1, "owner mismatch" )
 
    STEEM_DECLARE_OP_BASE_EXCEPTIONS( account_create );

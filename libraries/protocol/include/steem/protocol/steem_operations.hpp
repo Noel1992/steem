@@ -234,7 +234,6 @@ namespace steem { namespace protocol {
       void validate()const;
       void get_required_posting_authorities( flat_set<account_name_type>& a )const{ a.insert(voter); }
    };
-#endif // CK01
 
 
    /**
@@ -258,6 +257,7 @@ namespace steem { namespace protocol {
       void get_required_active_authorities( flat_set<account_name_type>& a )const{ if(amount.symbol != VESTS_SYMBOL) a.insert(from); }
       void get_required_owner_authorities( flat_set<account_name_type>& a )const { if(amount.symbol == VESTS_SYMBOL) a.insert(from); }
    };
+#endif // CK01
 
 
    /**
@@ -365,6 +365,7 @@ namespace steem { namespace protocol {
    };
 
 
+#ifdef CK01
    /**
     *  This operation converts STEEM into VFS (Vesting Fund Shares) at
     *  the current exchange rate. With this operation it is possible to
@@ -420,7 +421,7 @@ namespace steem { namespace protocol {
       void validate()const;
       void get_required_active_authorities( flat_set<account_name_type>& a )const { a.insert( from_account ); }
    };
-
+#endif // CK01
 
    /**
     * Witnesses must vote on how to set certain chain properties to ensure a smooth
@@ -613,6 +614,7 @@ namespace steem { namespace protocol {
    };
 
 
+#ifdef CK01
    /**
     * This operation creates a limit order and matches it against existing open orders.
     */
@@ -677,6 +679,7 @@ namespace steem { namespace protocol {
       void  validate()const;
       void  get_required_active_authorities( flat_set<account_name_type>& a )const{ a.insert(owner); }
    };
+#endif // CK01
 
 
    struct pow
@@ -1095,10 +1098,12 @@ FC_REFLECT( steem::protocol::account_update_operation,
             (memo_key)
             (json_metadata) )
 
+#ifdef CK01
 FC_REFLECT( steem::protocol::transfer_operation, (from)(to)(amount)(memo) )
 FC_REFLECT( steem::protocol::transfer_to_vesting_operation, (from)(to)(amount) )
 FC_REFLECT( steem::protocol::withdraw_vesting_operation, (account)(vesting_shares) )
 FC_REFLECT( steem::protocol::set_withdraw_vesting_route_operation, (from_account)(to_account)(percent)(auto_vest) )
+#endif // CK01
 FC_REFLECT( steem::protocol::witness_update_operation, (owner)(url)(block_signing_key)(props)(fee) )
 FC_REFLECT( steem::protocol::witness_set_properties_operation, (owner)(props)(extensions) )
 FC_REFLECT( steem::protocol::account_witness_vote_operation, (account)(witness)(approve) )
@@ -1110,9 +1115,11 @@ FC_REFLECT( steem::protocol::vote_operation, (voter)(author)(permlink)(weight) )
 FC_REFLECT( steem::protocol::custom_operation, (required_auths)(id)(data) )
 FC_REFLECT( steem::protocol::custom_json_operation, (required_auths)(required_posting_auths)(id)(json) )
 FC_REFLECT( steem::protocol::custom_binary_operation, (required_owner_auths)(required_active_auths)(required_posting_auths)(required_auths)(id)(data) )
+#ifdef CK01
 FC_REFLECT( steem::protocol::limit_order_create_operation, (owner)(orderid)(amount_to_sell)(min_to_receive)(fill_or_kill)(expiration) )
 FC_REFLECT( steem::protocol::limit_order_create2_operation, (owner)(orderid)(amount_to_sell)(exchange_rate)(fill_or_kill)(expiration) )
 FC_REFLECT( steem::protocol::limit_order_cancel_operation, (owner)(orderid) )
+#endif // CK01
 
 FC_REFLECT( steem::protocol::delete_comment_operation, (author)(permlink) );
 

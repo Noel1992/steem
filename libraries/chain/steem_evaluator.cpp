@@ -966,30 +966,26 @@ void escrow_release_evaluator::do_apply( const escrow_release_operation& o )
 #endif // CK01
 }
 
+#ifdef CK01
 void transfer_evaluator::do_apply( const transfer_operation& o )
 {
-#ifdef CK01
    FC_ASSERT( _db.get_balance( o.from, o.amount.symbol ) >= o.amount, "Account does not have sufficient funds for transfer." );
    _db.adjust_balance( o.from, -o.amount );
    _db.adjust_balance( o.to, o.amount );
-#endif // CK01
 }
 
 void transfer_to_vesting_evaluator::do_apply( const transfer_to_vesting_operation& o )
 {
-#ifdef CK01
    const auto& from_account = _db.get_account(o.from);
    const auto& to_account = o.to.size() ? _db.get_account(o.to) : from_account;
 
 //    FC_ASSERT( _db.get_balance( from_account, STEEM_SYMBOL) >= o.amount, "Account does not have sufficient STEEM for transfer." );
    _db.adjust_balance( from_account, -o.amount );
    _db.create_vesting( to_account, o.amount );
-#endif // CK01
 }
 
 void withdraw_vesting_evaluator::do_apply( const withdraw_vesting_operation& o )
 {
-#ifdef CK01
    const auto& account = _db.get_account( o.account );
 
    FC_ASSERT( account.vesting_shares >= asset( 0, VESTS_SYMBOL ), "Account does not have sufficient Steem Power for withdraw." );
@@ -1041,12 +1037,10 @@ void withdraw_vesting_evaluator::do_apply( const withdraw_vesting_operation& o )
          a.withdrawn = 0;
       });
    }
-#endif // CK01
 }
 
 void set_withdraw_vesting_route_evaluator::do_apply( const set_withdraw_vesting_route_operation& o )
 {
-#ifdef CK01
    try
    {
    const auto& from_account = _db.get_account( o.from_account );
@@ -1104,8 +1098,8 @@ void set_withdraw_vesting_route_evaluator::do_apply( const set_withdraw_vesting_
    FC_ASSERT( total_percent <= STEEM_100_PERCENT, "More than 100% of vesting withdrawals allocated to destinations." );
    }
    FC_CAPTURE_AND_RETHROW()
-#endif // CK01
 }
+#endif // CK01
 
 void account_witness_proxy_evaluator::do_apply( const account_witness_proxy_operation& o )
 {
@@ -1897,9 +1891,9 @@ void convert_evaluator::do_apply( const convert_operation& o )
 #endif // CK01
 }
 
+#ifdef CK01
 void limit_order_create_evaluator::do_apply( const limit_order_create_operation& o )
 {
-#ifdef CK01
    FC_ASSERT( o.expiration > _db.head_block_time(), "Limit order has to expire after head block time." );
 
 //    FC_ASSERT( _db.get_balance( o.owner, o.amount_to_sell.symbol ) >= o.amount_to_sell, "Account does not have sufficient funds for limit order." );
@@ -1919,12 +1913,10 @@ void limit_order_create_evaluator::do_apply( const limit_order_create_operation&
    bool filled = _db.apply_order( order );
 
    if( o.fill_or_kill ) FC_ASSERT( filled, "Cancelling order because it was not filled." );
-#endif // CK01
 }
 
 void limit_order_create2_evaluator::do_apply( const limit_order_create2_operation& o )
 {
-#ifdef CK01
    FC_ASSERT( o.expiration > _db.head_block_time(), "Limit order has to expire after head block time." );
 
 //    FC_ASSERT( _db.get_balance( o.owner, o.amount_to_sell.symbol ) >= o.amount_to_sell, "Account does not have sufficient funds for limit order." );
@@ -1944,15 +1936,13 @@ void limit_order_create2_evaluator::do_apply( const limit_order_create2_operatio
    bool filled = _db.apply_order( order );
 
    if( o.fill_or_kill ) FC_ASSERT( filled, "Cancelling order because it was not filled." );
-#endif // CK01
 }
 
 void limit_order_cancel_evaluator::do_apply( const limit_order_cancel_operation& o )
 {
-#ifdef CK01
    _db.cancel_order( _db.get_limit_order( o.owner, o.orderid ) );
-#endif // CK01
 }
+#endif // CK01
 
 void report_over_production_evaluator::do_apply( const report_over_production_operation& o )
 {

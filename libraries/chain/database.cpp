@@ -447,6 +447,7 @@ const escrow_object* database::find_escrow( const account_name_type& name, uint3
    return find< escrow_object, by_from_id >( boost::make_tuple( name, escrow_id ) );
 }
 
+#ifdef CK01
 const limit_order_object& database::get_limit_order( const account_name_type& name, uint32_t orderid )const
 { try {
    if( !has_hardfork( STEEM_HARDFORK_0_6__127 ) )
@@ -462,6 +463,7 @@ const limit_order_object* database::find_limit_order( const account_name_type& n
 
    return find< limit_order_object, by_account >( boost::make_tuple( name, orderid ) );
 }
+#endif // CK01
 
 const savings_withdraw_object& database::get_savings_withdraw( const account_name_type& owner, uint32_t request_id )const
 { try {
@@ -1375,6 +1377,7 @@ void database::update_owner_authority( const account_object& account, const auth
    });
 }
 
+#ifdef CK01
 void database::process_vesting_withdrawals()
 {
    const auto& widx = get_index< account_index, by_next_vesting_withdrawal >();
@@ -1495,6 +1498,7 @@ void database::process_vesting_withdrawals()
       push_virtual_operation( fill_vesting_withdraw_operation( from_account.name, from_account.name, asset( to_convert, VESTS_SYMBOL ), converted_steem ) );
    }
 }
+#endif // CK01
 
 void database::adjust_total_payout( const comment_object& cur, const asset& sbd_created, const asset& curator_sbd_value, const asset& beneficiary_value )
 {
@@ -2237,10 +2241,12 @@ void database::initialize_evaluators()
    _my->_evaluator_registry.register_evaluator< comment_evaluator                        >();
    _my->_evaluator_registry.register_evaluator< comment_options_evaluator                >();
    _my->_evaluator_registry.register_evaluator< delete_comment_evaluator                 >();
+#ifdef CK01
    _my->_evaluator_registry.register_evaluator< transfer_evaluator                       >();
    _my->_evaluator_registry.register_evaluator< transfer_to_vesting_evaluator            >();
    _my->_evaluator_registry.register_evaluator< withdraw_vesting_evaluator               >();
    _my->_evaluator_registry.register_evaluator< set_withdraw_vesting_route_evaluator     >();
+#endif // CK01
    _my->_evaluator_registry.register_evaluator< account_create_evaluator                 >();
    _my->_evaluator_registry.register_evaluator< account_update_evaluator                 >();
    _my->_evaluator_registry.register_evaluator< witness_update_evaluator                 >();
@@ -2254,9 +2260,11 @@ void database::initialize_evaluators()
    _my->_evaluator_registry.register_evaluator< report_over_production_evaluator         >();
    _my->_evaluator_registry.register_evaluator< feed_publish_evaluator                   >();
    _my->_evaluator_registry.register_evaluator< convert_evaluator                        >();
+#ifdef CK01
    _my->_evaluator_registry.register_evaluator< limit_order_create_evaluator             >();
    _my->_evaluator_registry.register_evaluator< limit_order_create2_evaluator            >();
    _my->_evaluator_registry.register_evaluator< limit_order_cancel_evaluator             >();
+#endif // CK01
    _my->_evaluator_registry.register_evaluator< placeholder_a_evaluator                  >();
    _my->_evaluator_registry.register_evaluator< placeholder_b_evaluator                  >();
    _my->_evaluator_registry.register_evaluator< request_account_recovery_evaluator       >();
@@ -2323,14 +2331,18 @@ void database::initialize_indexes()
    add_core_index< comment_vote_index                      >(*this);
 #endif // CK01
    add_core_index< witness_vote_index                      >(*this);
+#ifdef CK01
    add_core_index< limit_order_index                       >(*this);
+#endif // CK01
    add_core_index< feed_history_index                      >(*this);
    add_core_index< convert_request_index                   >(*this);
    add_core_index< liquidity_reward_balance_index          >(*this);
    add_core_index< operation_index                         >(*this);
    add_core_index< account_history_index                   >(*this);
    add_core_index< hardfork_property_index                 >(*this);
+#ifdef CK01
    add_core_index< withdraw_vesting_route_index            >(*this);
+#endif // CK01
    add_core_index< owner_authority_history_index           >(*this);
    add_core_index< account_recovery_request_index          >(*this);
    add_core_index< change_recovery_account_request_index   >(*this);
@@ -2800,7 +2812,9 @@ void database::_apply_block( const signed_block& next_block )
 
    create_block_summary(next_block);
    clear_expired_transactions();
+   #ifdef CK01
    clear_expired_orders();
+   #endif // CK01
    clear_expired_delegations();
    update_witness_schedule(*this);
 
@@ -2811,7 +2825,9 @@ void database::_apply_block( const signed_block& next_block )
    process_funds();
    process_conversions();
    process_comment_cashout();
+#ifdef CK01
    process_vesting_withdrawals();
+#endif // CK01
    process_savings_withdraws();
    pay_liquidity_reward();
    update_virtual_supply();
@@ -3253,7 +3269,7 @@ void database::update_last_irreversible_block()
    _fork_db.set_max_size( dpo.head_block_number - dpo.last_irreversible_block_num + 1 );
 } FC_CAPTURE_AND_RETHROW() }
 
-
+#ifdef CK01
 bool database::apply_order( const limit_order_object& new_order_object )
 {
    auto order_id = new_order_object.id;
@@ -3364,6 +3380,7 @@ int database::match( const limit_order_object& new_order, const limit_order_obje
    }
    return result;
 }
+#endif // CK01
 
 
 void database::adjust_liquidity_reward( const account_object& owner, const asset& volume, bool is_sdb )
@@ -3406,7 +3423,7 @@ void database::adjust_liquidity_reward( const account_object& owner, const asset
    }
 }
 
-
+#ifdef CK01
 bool database::fill_order( const limit_order_object& order, const asset& pays, const asset& receives )
 {
    try
@@ -3461,6 +3478,7 @@ void database::cancel_order( const limit_order_object& order )
    adjust_balance( order.seller, order.amount_for_sale() );
    remove(order);
 }
+#endif // CK01
 
 
 void database::clear_expired_transactions()
@@ -3473,6 +3491,7 @@ void database::clear_expired_transactions()
       remove( *dedupe_index.begin() );
 }
 
+#ifdef CK01
 void database::clear_expired_orders()
 {
    auto now = head_block_time();
@@ -3484,6 +3503,7 @@ void database::clear_expired_orders()
       itr = orders_by_exp.begin();
    }
 }
+#endif // CK01
 
 void database::clear_expired_delegations()
 {
@@ -4320,6 +4340,7 @@ void database::validate_invariants()const
             FC_ASSERT( false, "Encountered illegal symbol in convert_request_object" );
       }
 
+#ifdef CK01
       const auto& limit_order_idx = get_index< limit_order_index >().indices();
 
       for( auto itr = limit_order_idx.begin(); itr != limit_order_idx.end(); ++itr )
@@ -4333,6 +4354,7 @@ void database::validate_invariants()const
             total_sbd += asset( itr->for_sale, SBD_SYMBOL );
          }
       }
+#endif // CK01
 
       const auto& escrow_idx = get_index< escrow_index >().indices().get< by_id >();
 
