@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef CK01
 #include <fc/container/flat.hpp>
 #include <steem/protocol/operations.hpp>
 #include <steem/protocol/transaction.hpp>
@@ -20,3 +20,4 @@ void transaction_get_impacted_accounts(
    );
 
 } } // steem::app
+#endif // CK01

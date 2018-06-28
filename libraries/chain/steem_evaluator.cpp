@@ -1221,9 +1221,9 @@ void account_witness_vote_evaluator::do_apply( const account_witness_vote_operat
    }
 }
 
+#ifdef CK01
 void vote_evaluator::do_apply( const vote_operation& o )
 {
-#ifdef CK01
    try {
    const auto& comment = _db.get_comment( o.author, o.permlink );
    const auto& voter   = _db.get_account( o.voter );
@@ -1609,8 +1609,8 @@ void vote_evaluator::do_apply( const vote_operation& o )
    }
 
 } FC_CAPTURE_AND_RETHROW( (o))
-#endif // CK01
 }
+#endif // CK01
 
 void custom_evaluator::do_apply( const custom_operation& o ){}
 

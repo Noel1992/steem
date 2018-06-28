@@ -13,7 +13,9 @@ namespace steem { namespace protocol {
     * or it will trigger a hardfork.
     */
    typedef fc::static_variant<
+#ifdef CK01
             vote_operation,
+#endif // CK01
             comment_operation,
 
             transfer_operation,

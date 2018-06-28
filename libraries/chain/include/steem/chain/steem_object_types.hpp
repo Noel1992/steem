@@ -81,7 +81,9 @@ class block_summary_object;
 class witness_schedule_object;
 class comment_object;
 class comment_content_object;
+#ifdef CK01
 class comment_vote_object;
+#endif // CK01
 class witness_vote_object;
 class limit_order_object;
 class feed_history_object;
@@ -118,7 +120,9 @@ typedef oid< block_summary_object                   > block_summary_id_type;
 typedef oid< witness_schedule_object                > witness_schedule_id_type;
 typedef oid< comment_object                         > comment_id_type;
 typedef oid< comment_content_object                 > comment_content_id_type;
+#ifdef CK01
 typedef oid< comment_vote_object                    > comment_vote_id_type;
+#endif // CK01
 typedef oid< witness_vote_object                    > witness_vote_id_type;
 typedef oid< limit_order_object                     > limit_order_id_type;
 typedef oid< feed_history_object                    > feed_history_id_type;

@@ -21,7 +21,9 @@ STEEM_DEFINE_EVALUATOR( set_withdraw_vesting_route )
 STEEM_DEFINE_EVALUATOR( comment )
 STEEM_DEFINE_EVALUATOR( comment_options )
 STEEM_DEFINE_EVALUATOR( delete_comment )
+#ifdef CK01
 STEEM_DEFINE_EVALUATOR( vote )
+#endif // CK01
 STEEM_DEFINE_EVALUATOR( custom )
 STEEM_DEFINE_EVALUATOR( custom_json )
 STEEM_DEFINE_EVALUATOR( custom_binary )

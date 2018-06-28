@@ -146,6 +146,7 @@ namespace steem { namespace protocol {
       FC_ASSERT( false, "This is not a valid op" );
    }
 
+#ifdef CK01
    void vote_operation::validate() const
    {
       validate_account_name( voter );
@@ -153,6 +154,7 @@ namespace steem { namespace protocol {
       FC_ASSERT( abs(weight) <= STEEM_100_PERCENT, "Weight is not a STEEMIT percentage" );
       validate_permlink( permlink );
    }
+#endif // CK01
 
    void transfer_operation::validate() const
    { try {

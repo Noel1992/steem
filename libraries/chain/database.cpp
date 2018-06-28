@@ -1508,6 +1508,7 @@ void database::adjust_total_payout( const comment_object& cur, const asset& sbd_
    /// TODO: potentially modify author's total payout numbers as well
 }
 
+#ifdef CK01
 /**
  *  This method will iterate through all comment_vote_objects and give them
  *  (max_rewards * weight) / c.total_vote_weight.
@@ -1558,6 +1559,7 @@ share_type database::pay_curators( const comment_object& c, share_type& max_rewa
       return unclaimed_rewards;
    } FC_CAPTURE_AND_RETHROW()
 }
+#endif // CK01
 
 void fill_comment_reward_context_local_state( util::comment_reward_context& ctx, const comment_object& comment )
 {
@@ -1591,7 +1593,9 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
             share_type curation_tokens = ( ( reward_tokens * get_curation_rewards_percent( comment ) ) / STEEM_100_PERCENT ).to_uint64();
             share_type author_tokens = reward_tokens.to_uint64() - curation_tokens;
 
+#ifdef CK01
             author_tokens += pay_curators( comment, curation_tokens );
+#endif // CK01
             share_type total_beneficiary = 0;
             claimed_reward = author_tokens + curation_tokens;
 
@@ -1666,6 +1670,7 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
 
       push_virtual_operation( comment_payout_update_operation( comment.author, to_string( comment.permlink ) ) );
 
+#ifdef CK01
       const auto& vote_idx = get_index< comment_vote_index >().indices().get< by_comment_voter >();
       auto vote_itr = vote_idx.lower_bound( comment.id );
       while( vote_itr != vote_idx.end() && vote_itr->comment == comment.id )
@@ -1686,6 +1691,7 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
 #endif
          }
       }
+#endif // CK01
 
       return claimed_reward;
    } FC_CAPTURE_AND_RETHROW( (comment) )
@@ -2225,7 +2231,9 @@ uint32_t database::last_non_undoable_block_num() const
 
 void database::initialize_evaluators()
 {
+#ifdef CK01
    _my->_evaluator_registry.register_evaluator< vote_evaluator                           >();
+#endif // CK01
    _my->_evaluator_registry.register_evaluator< comment_evaluator                        >();
    _my->_evaluator_registry.register_evaluator< comment_options_evaluator                >();
    _my->_evaluator_registry.register_evaluator< delete_comment_evaluator                 >();
@@ -2311,7 +2319,9 @@ void database::initialize_indexes()
    add_core_index< witness_schedule_index                  >(*this);
    add_core_index< comment_index                           >(*this);
    add_core_index< comment_content_index                   >(*this);
+#ifdef CK01
    add_core_index< comment_vote_index                      >(*this);
+#endif // CK01
    add_core_index< witness_vote_index                      >(*this);
    add_core_index< limit_order_index                       >(*this);
    add_core_index< feed_history_index                      >(*this);

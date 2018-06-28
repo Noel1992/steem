@@ -223,6 +223,7 @@ namespace steem { namespace protocol {
    };
 
 
+#ifdef CK01
    struct vote_operation : public base_operation
    {
       account_name_type    voter;
@@ -233,6 +234,7 @@ namespace steem { namespace protocol {
       void validate()const;
       void get_required_posting_authorities( flat_set<account_name_type>& a )const{ a.insert(voter); }
    };
+#endif // CK01
 
 
    /**
@@ -1102,7 +1104,9 @@ FC_REFLECT( steem::protocol::witness_set_properties_operation, (owner)(props)(ex
 FC_REFLECT( steem::protocol::account_witness_vote_operation, (account)(witness)(approve) )
 FC_REFLECT( steem::protocol::account_witness_proxy_operation, (account)(proxy) )
 FC_REFLECT( steem::protocol::comment_operation, (parent_author)(parent_permlink)(author)(permlink)(title)(body)(json_metadata) )
+#ifdef CK01
 FC_REFLECT( steem::protocol::vote_operation, (voter)(author)(permlink)(weight) )
+#endif // CK01
 FC_REFLECT( steem::protocol::custom_operation, (required_auths)(id)(data) )
 FC_REFLECT( steem::protocol::custom_json_operation, (required_auths)(required_posting_auths)(id)(json) )
 FC_REFLECT( steem::protocol::custom_binary_operation, (required_owner_auths)(required_active_auths)(required_posting_auths)(required_auths)(id)(data) )

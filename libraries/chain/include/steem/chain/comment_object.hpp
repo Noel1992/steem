@@ -120,6 +120,7 @@ namespace steem { namespace chain {
          shared_string     json_metadata;
    };
 
+#ifdef CK01
    /**
     * This index maintains the set of voter/comment pairs that have been used, voters cannot
     * vote on the same comment more than once per payout period.
@@ -183,6 +184,7 @@ namespace steem { namespace chain {
       >,
       allocator< comment_vote_object >
    > comment_vote_index;
+#endif // CK01
 
 
    struct by_cashout_time; /// cashout_time
@@ -281,10 +283,12 @@ FC_REFLECT( steem::chain::comment_content_object,
             (id)(comment)(title)(body)(json_metadata) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::comment_content_object, steem::chain::comment_content_index )
 
+#ifdef CK01
 FC_REFLECT( steem::chain::comment_vote_object,
              (id)(voter)(comment)(weight)(rshares)(vote_percent)(last_update)(num_changes)
           )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::comment_vote_object, steem::chain::comment_vote_index )
+#endif // CK01
 
 namespace helpers
 {

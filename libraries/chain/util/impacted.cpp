@@ -1,3 +1,4 @@
+#ifdef CK01
 #include <steem/protocol/authority.hpp>
 
 #include <steem/chain/util/impacted.hpp>
@@ -257,3 +258,5 @@ void transaction_get_impacted_accounts( const transaction& tx, flat_set<account_
 }
 
 } }
+
+#endif // CK01
