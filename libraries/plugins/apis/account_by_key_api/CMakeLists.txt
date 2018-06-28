@@ -1,3 +1,4 @@
+if ( CK01 )
 file(GLOB HEADERS "include/steem/plugins/account_by_key_api/*.hpp")
 add_library( account_by_key_api_plugin
              account_by_key_api_plugin.cpp
@@ -21,3 +22,4 @@ install( TARGETS
    LIBRARY DESTINATION lib
    ARCHIVE DESTINATION lib
 )
+endif ( CK01 )
