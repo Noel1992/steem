@@ -22,7 +22,11 @@ add_library( steem_chain
              ${HEADERS}
            )
 
+if ( CK01 )
 target_link_libraries( steem_chain steem_protocol fc chainbase steem_schema ${PATCH_MERGE_LIB} )
+else ( CK01 )
+target_link_libraries( steem_chain steem_protocol fc chainbase ${PATCH_MERGE_LIB} )
+endif ( CK01 )
 target_include_directories( steem_chain
                             PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_BINARY_DIR}/include" )
 

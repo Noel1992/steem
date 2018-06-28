@@ -1,5 +1,7 @@
 add_subdirectory( fc )
+if ( CK01 )
 add_subdirectory( schema )
+endif ( CK01 )
 add_subdirectory( appbase )
 add_subdirectory( chainbase )
 add_subdirectory( chain )

@@ -384,8 +384,10 @@ namespace steem { namespace chain {
          //////////////////// db_init.cpp ////////////////////
 
          void initialize_evaluators();
+#ifdef CK01
          void set_custom_operation_interpreter( const std::string& id, std::shared_ptr< custom_operation_interpreter > registry );
          std::shared_ptr< custom_operation_interpreter > get_custom_json_evaluator( const std::string& id );
+#endif // CK01
 
          /// Reset the object graph in-memory
          void initialize_indexes();
@@ -428,7 +430,9 @@ namespace steem { namespace chain {
           * @}
           */
 
+#ifdef CK01
          const std::string& get_json_schema() const;
+#endif // CK01
 
          void set_flush_interval( uint32_t flush_blocks );
          void check_free_memory( bool force_print, uint32_t current_block_num );
@@ -536,8 +540,10 @@ namespace steem { namespace chain {
          uint16_t                      _shared_file_full_threshold = 0;
          uint16_t                      _shared_file_scale_rate = 0;
 
+#ifdef CK01
          flat_map< std::string, std::shared_ptr< custom_operation_interpreter > >   _custom_operation_interpreters;
          std::string                   _json_schema;
+#endif // CK01
 
          fc::signal<on_reindex_start_t>   _on_reindex_start;
          fc::signal<on_reindex_done_t>    _on_reindex_done;

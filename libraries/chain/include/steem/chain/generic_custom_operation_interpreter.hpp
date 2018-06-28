@@ -1,6 +1,7 @@
 
 #pragma once
 
+#ifdef CK01
 #include <steem/protocol/steem_operations.hpp>
 #include <steem/protocol/operation_util_impl.hpp>
 #include <steem/protocol/types.hpp>
@@ -117,3 +118,5 @@ class generic_custom_operation_interpreter
 };
 
 } }
+
+#endif // CK01

@@ -1,6 +1,7 @@
 
 #pragma once
 
+#ifdef CK01
 #include <memory>
 
 namespace steem { namespace schema {
@@ -22,3 +23,4 @@ class custom_operation_interpreter
 };
 
 } } // steem::chain
+#endif // CK01

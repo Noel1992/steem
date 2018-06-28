@@ -1,6 +1,8 @@
 #include <steem/chain/steem_evaluator.hpp>
 #include <steem/chain/database.hpp>
+#ifdef CK01
 #include <steem/chain/custom_operation_interpreter.hpp>
+#endif // CK01
 #include <steem/chain/steem_objects.hpp>
 #include <steem/chain/witness_objects.hpp>
 #include <steem/chain/block_summary_object.hpp>

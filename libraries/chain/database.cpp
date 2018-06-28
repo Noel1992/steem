@@ -37,6 +37,7 @@
 #include <fstream>
 #include <functional>
 
+#ifdef CK01
 namespace steem { namespace chain {
 
 struct object_schema_repr
@@ -64,6 +65,7 @@ struct db_schema
 FC_REFLECT( steem::chain::object_schema_repr, (space_type)(type) )
 FC_REFLECT( steem::chain::operation_schema_repr, (id)(type) )
 FC_REFLECT( steem::chain::db_schema, (types)(object_types)(operation_type)(custom_operation_types) )
+#endif // CK01
 
 namespace steem { namespace chain {
 
@@ -2281,7 +2283,7 @@ void database::initialize_evaluators()
 #endif
 }
 
-
+#ifdef CK01
 void database::set_custom_operation_interpreter( const std::string& id, std::shared_ptr< custom_operation_interpreter > registry )
 {
    bool inserted = _custom_operation_interpreters.emplace( id, registry ).second;
@@ -2296,6 +2298,7 @@ std::shared_ptr< custom_operation_interpreter > database::get_custom_json_evalua
       return it->second;
    return std::shared_ptr< custom_operation_interpreter >();
 }
+#endif // CK01
 
 void database::initialize_indexes()
 {
@@ -2336,12 +2339,12 @@ void database::initialize_indexes()
    _plugin_index_signal();
 }
 
+#ifdef CK01
 const std::string& database::get_json_schema()const
 {
    return _json_schema;
 }
 
-#ifdef CK01
 void database::init_schema()
 {
    /*done_adding_indexes();
