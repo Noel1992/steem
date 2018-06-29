@@ -29,11 +29,13 @@ namespace steem { namespace chain {
    using steem::protocol::price;
 
    class database_impl;
+#ifdef CK01
    class custom_operation_interpreter;
 
    namespace util {
       struct comment_reward_context;
    }
+#endif // CK01
 
    /**
     *   @class database
@@ -126,8 +128,10 @@ namespace steem { namespace chain {
           */
          bool                       is_known_block( const block_id_type& id )const;
          bool                       is_known_transaction( const transaction_id_type& id )const;
+#ifdef CK01
          fc::sha256                 get_pow_target()const;
          uint32_t                   get_pow_summary_target()const;
+#endif // CK01
          block_id_type              find_block_id_for_num( uint32_t block_num )const;
          block_id_type              get_block_id_for_num( uint32_t block_num )const;
          optional<signed_block>     fetch_block_by_id( const block_id_type& id )const;
@@ -152,29 +156,33 @@ namespace steem { namespace chain {
          const comment_object&  get_comment(  const account_name_type& author, const string& permlink )const;
          const comment_object*  find_comment( const account_name_type& author, const string& permlink )const;
 
+#ifdef CK01
          const escrow_object&   get_escrow(  const account_name_type& name, uint32_t escrow_id )const;
          const escrow_object*   find_escrow( const account_name_type& name, uint32_t escrow_id )const;
-#ifdef CK01
          const limit_order_object& get_limit_order(  const account_name_type& owner, uint32_t id )const;
          const limit_order_object* find_limit_order( const account_name_type& owner, uint32_t id )const;
-#endif // CK01
 
          const savings_withdraw_object& get_savings_withdraw(  const account_name_type& owner, uint32_t request_id )const;
          const savings_withdraw_object* find_savings_withdraw( const account_name_type& owner, uint32_t request_id )const;
+#endif // CK01
 
          const dynamic_global_property_object&  get_dynamic_global_properties()const;
          const node_property_object&            get_node_properties()const;
+#ifdef CK01
          const feed_history_object&             get_feed_history()const;
+#endif // CK01
          const witness_schedule_object&         get_witness_schedule_object()const;
          const hardfork_property_object&        get_hardfork_property_object()const;
 
          const time_point_sec                   calculate_discussion_payout_time( const comment_object& comment )const;
+#ifdef CK01
          const reward_fund_object&              get_reward_fund( const comment_object& c )const;
 
          /**
           *  Deducts fee from the account and the share supply
           */
          void pay_fee( const account_object& a, asset fee );
+#endif // CK01
 
          void max_bandwidth_per_share()const;
 
@@ -306,13 +314,12 @@ namespace steem { namespace chain {
           */
          uint32_t get_slot_at_time(fc::time_point_sec when)const;
 
+#ifdef CK01
          /** @return the sbd created and deposited to_account, may return STEEM if there is no median feed */
          std::pair< asset, asset > create_sbd( const account_object& to_account, asset steem, bool to_reward_balance=false );
          asset create_vesting( const account_object& to_account, asset steem, bool to_reward_balance=false );
          void adjust_total_payout( const comment_object& a, const asset& sbd, const asset& curator_sbd_value, const asset& beneficiary_value );
-#ifdef CK01
          void        adjust_liquidity_reward( const account_object& owner, const asset& volume, bool is_bid );
-#endif // CK01
          void        adjust_balance( const account_object& a, const asset& delta );
          void        adjust_balance( const account_name_type& name, const asset& delta );
          void        adjust_savings_balance( const account_object& a, const asset& delta );
@@ -320,11 +327,14 @@ namespace steem { namespace chain {
          void        adjust_reward_balance( const account_name_type& name, const asset& delta );
          void        adjust_supply( const asset& delta, bool adjust_vesting = false );
          void        adjust_rshares2( const comment_object& comment, fc::uint128_t old_rshares2, fc::uint128_t new_rshares2 );
+#endif // CK01
          void        update_owner_authority( const account_object& account, const authority& owner_authority );
 
+#ifdef CK01
          asset       get_balance( const account_object& a, asset_symbol_type symbol )const;
          asset       get_savings_balance( const account_object& a, asset_symbol_type symbol )const;
          asset       get_balance( const string& aname, asset_symbol_type symbol )const { return get_balance( get_account(aname), symbol ); }
+#endif // CK01
 
          /** this updates the votes for witnesses as a result of account voting proxy changing */
          void adjust_proxied_witness_votes( const account_object& a,
@@ -353,26 +363,20 @@ namespace steem { namespace chain {
          void process_funds();
          void process_conversions();
          void process_savings_withdraws();
-#endif // CK01
          void account_recovery_processing();
          void expire_escrow_ratification();
          void process_decline_voting_rights();
          void update_median_feed();
-
          asset get_liquidity_reward()const;
          asset get_content_reward()const;
-#ifdef CK01
          asset get_producer_reward();
-#endif // CK01
          asset get_curation_reward()const;
          asset get_pow_reward()const;
 
          uint16_t get_curation_rewards_percent( const comment_object& c ) const;
 
          share_type pay_reward_funds( share_type reward );
-#ifdef CK01
          void  pay_liquidity_reward();
-#endif // CK01
 
          /**
           * Helper method to return the current sbd value of a given amount of
@@ -380,6 +384,7 @@ namespace steem { namespace chain {
           */
          asset to_sbd( const asset& steem )const;
          asset to_steem( const asset& sbd )const;
+#endif // CK01
 
          time_point_sec   head_block_time()const;
          uint32_t         head_block_num()const;
@@ -427,8 +432,8 @@ namespace steem { namespace chain {
          void retally_witness_vote_counts( bool force = false );
 #ifdef CK01
          void retally_liquidity_weight();
-#endif // CK01
          void update_virtual_supply();
+#endif // CK01
 
          bool has_hardfork( uint32_t hardfork )const;
 
@@ -495,7 +500,9 @@ namespace steem { namespace chain {
          const witness_object& validate_block_header( uint32_t skip, const signed_block& next_block )const;
          void create_block_summary(const signed_block& next_block);
 
+#ifdef CK01
          void clear_null_account_balance();
+#endif // CK01
 
          void update_global_dynamic_data( const signed_block& b );
          void update_signing_witness(const witness_object& signing_witness, const signed_block& new_block);
@@ -516,8 +523,10 @@ namespace steem { namespace chain {
          template< typename smt_balance_object_type >
          void adjust_smt_balance( const account_name_type& name, const asset& delta, bool check_account );
 #endif
+#ifdef CK01
          void modify_balance( const account_object& a, const asset& delta, bool check_balance );
          void modify_reward_balance( const account_object& a, const asset& delta, bool check_balance );
+#endif // CK01
 
          std::unique_ptr< database_impl > _my;
 

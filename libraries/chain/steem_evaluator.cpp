@@ -74,6 +74,7 @@ struct strcmp_equal
    }
 };
 
+#ifdef CK01
 template< bool force_canon >
 void copy_legacy_chain_properties( chain_properties& dest, const legacy_chain_properties& src )
 {
@@ -81,11 +82,13 @@ void copy_legacy_chain_properties( chain_properties& dest, const legacy_chain_pr
    dest.maximum_block_size = src.maximum_block_size;
    dest.sbd_interest_rate = src.sbd_interest_rate;
 }
+#endif // CK01
 
 void witness_update_evaluator::do_apply( const witness_update_operation& o )
 {
    _db.get_account( o.owner ); // verify owner exists
 
+#ifdef CK01
    if ( _db.has_hardfork( STEEM_HARDFORK_0_14__410 ) )
    {
       FC_ASSERT( o.props.account_creation_fee.symbol.is_canon() );
@@ -107,6 +110,7 @@ void witness_update_evaluator::do_apply( const witness_update_operation& o )
    {
       FC_ASSERT( o.props.maximum_block_size <= STEEM_SOFT_MAX_BLOCK_SIZE, "Max block size cannot be more than 2MiB" );
    }
+#endif // CK01
 
    const auto& by_witness_name_idx = _db.get_index< witness_index >().indices().get< by_name >();
    auto wit_itr = by_witness_name_idx.find( o.owner );
@@ -115,7 +119,9 @@ void witness_update_evaluator::do_apply( const witness_update_operation& o )
       _db.modify( *wit_itr, [&]( witness_object& w ) {
          from_string( w.url, o.url );
          w.signing_key        = o.block_signing_key;
+#ifdef CK01
          copy_legacy_chain_properties< false >( w.props, o.props );
+#endif // CK01
       });
    }
    else
@@ -125,7 +131,9 @@ void witness_update_evaluator::do_apply( const witness_update_operation& o )
          from_string( w.url, o.url );
          w.signing_key        = o.block_signing_key;
          w.created            = _db.head_block_time();
+#ifdef CK01
          copy_legacy_chain_properties< false >( w.props, o.props );
+#endif // CK01
       });
    }
 }
@@ -284,7 +292,11 @@ void account_create_evaluator::do_apply( const account_create_operation& o )
       c.balance -= o.fee;
    });
 
+#ifdef CK01
    const auto& new_account = _db.create< account_object >( [&]( account_object& acc )
+#else
+   _db.create< account_object >( [&]( account_object& acc )
+#endif // CK01
    {
       acc.name = o.new_account_name;
       acc.memo_key = o.memo_key;
@@ -312,8 +324,10 @@ void account_create_evaluator::do_apply( const account_create_operation& o )
       auth.last_owner_update = fc::time_point_sec::min();
    });
 
+#ifdef CK01
    if( o.fee.amount > 0 )
       _db.create_vesting( new_account, o.fee );
+#endif // CK01
 }
 
 #ifdef CK01
@@ -464,12 +478,12 @@ void account_update_evaluator::do_apply( const account_update_operation& o )
 }
 
 
+#ifdef CK01
 /**
  *  Because net_rshares is 0 there is no need to update any pending payout calculations or parent posts.
  */
 void delete_comment_evaluator::do_apply( const delete_comment_operation& o )
 {
-#ifdef CK01
    const auto& comment = _db.get_comment( o.author, o.permlink );
    FC_ASSERT( comment.children == 0, "Cannot delete a comment with replies." );
 
@@ -511,7 +525,6 @@ void delete_comment_evaluator::do_apply( const delete_comment_operation& o )
    }
 
    _db.remove( comment );
-#endif // CK01
 }
 
 struct comment_options_extension_visitor
@@ -570,6 +583,7 @@ void comment_options_evaluator::do_apply( const comment_options_operation& o )
       e.visit( comment_options_extension_visitor( comment, _db ) );
    }
 }
+#endif // CK01
 
 void comment_evaluator::do_apply( const comment_operation& o )
 { try {
@@ -785,9 +799,9 @@ void comment_evaluator::do_apply( const comment_operation& o )
 
 } FC_CAPTURE_AND_RETHROW( (o) ) }
 
+#ifdef CK01
 void escrow_transfer_evaluator::do_apply( const escrow_transfer_operation& o )
 {
-#ifdef CK01
    try
    {
       const auto& from_account = _db.get_account(o.from);
@@ -824,12 +838,10 @@ void escrow_transfer_evaluator::do_apply( const escrow_transfer_operation& o )
       });
    }
    FC_CAPTURE_AND_RETHROW( (o) )
-#endif // CK01
 }
 
 void escrow_approve_evaluator::do_apply( const escrow_approve_operation& o )
 {
-#ifdef CK01
    try
    {
 
@@ -885,12 +897,10 @@ void escrow_approve_evaluator::do_apply( const escrow_approve_operation& o )
       }
    }
    FC_CAPTURE_AND_RETHROW( (o) )
-#endif // CK01
 }
 
 void escrow_dispute_evaluator::do_apply( const escrow_dispute_operation& o )
 {
-#ifdef CK01
    try
    {
       _db.get_account( o.from ); // Verify from account exists
@@ -908,12 +918,10 @@ void escrow_dispute_evaluator::do_apply( const escrow_dispute_operation& o )
       });
    }
    FC_CAPTURE_AND_RETHROW( (o) )
-#endif // CK01
 }
 
 void escrow_release_evaluator::do_apply( const escrow_release_operation& o )
 {
-#ifdef CK01
    try
    {
       _db.get_account(o.from); // Verify from account exists
@@ -965,10 +973,8 @@ void escrow_release_evaluator::do_apply( const escrow_release_operation& o )
       }
    }
    FC_CAPTURE_AND_RETHROW( (o) )
-#endif // CK01
 }
 
-#ifdef CK01
 void transfer_evaluator::do_apply( const transfer_operation& o )
 {
    FC_ASSERT( _db.get_balance( o.from, o.amount.symbol ) >= o.amount, "Account does not have sufficient funds for transfer." );
@@ -1606,13 +1612,11 @@ void vote_evaluator::do_apply( const vote_operation& o )
 
 } FC_CAPTURE_AND_RETHROW( (o))
 }
-#endif // CK01
 
 void custom_evaluator::do_apply( const custom_operation& o ){}
 
 void custom_json_evaluator::do_apply( const custom_json_operation& o )
 {
-#ifdef CK01
    database& d = db();
    std::shared_ptr< custom_operation_interpreter > eval = d.get_custom_json_evaluator( o.id );
    if( !eval )
@@ -1631,13 +1635,11 @@ void custom_json_evaluator::do_apply( const custom_json_operation& o )
    {
       elog( "Unexpected exception applying custom json evaluator." );
    }
-#endif // CK01
 }
 
 
 void custom_binary_evaluator::do_apply( const custom_binary_operation& o )
 {
-#ifdef CK01
    database& d = db();
    FC_ASSERT( d.has_hardfork( STEEM_HARDFORK_0_14__317 ) );
 
@@ -1658,7 +1660,6 @@ void custom_binary_evaluator::do_apply( const custom_binary_operation& o )
    {
       elog( "Unexpected exception applying custom json evaluator." );
    }
-#endif // CK01
 }
 
 
@@ -1757,16 +1758,13 @@ void pow_apply( database& db, Operation o )
 }
 
 void pow_evaluator::do_apply( const pow_operation& o ) {
-#ifdef CK01
    FC_ASSERT( !db().has_hardfork( STEEM_HARDFORK_0_13__256 ), "pow is deprecated. Use pow2 instead" );
    pow_apply( db(), o );
-#endif // CK01
 }
 
 
 void pow2_evaluator::do_apply( const pow2_operation& o )
 {
-#ifdef CK01
    database& db = this->db();
    FC_ASSERT( !db.has_hardfork( STEEM_HARDFORK_0_17__770 ), "mining is now disabled" );
 
@@ -1852,7 +1850,6 @@ void pow2_evaluator::do_apply( const pow2_operation& o )
       const auto& inc_witness = db.get_account( dgp.current_witness );
       db.create_vesting( inc_witness, inc_reward );
    }
-#endif // CK01
 }
 
 void feed_publish_evaluator::do_apply( const feed_publish_operation& o )
@@ -1871,7 +1868,6 @@ void feed_publish_evaluator::do_apply( const feed_publish_operation& o )
 
 void convert_evaluator::do_apply( const convert_operation& o )
 {
-#ifdef CK01
 //   FC_ASSERT( _db.get_balance( o.owner, o.amount.symbol ) >= o.amount, "Account does not have sufficient balance for conversion." );
 
   _db.adjust_balance( o.owner, -o.amount );
@@ -1890,10 +1886,8 @@ void convert_evaluator::do_apply( const convert_operation& o )
       obj.amount          = o.amount;
       obj.conversion_date = _db.head_block_time() + steem_conversion_delay;
   });
-#endif // CK01
 }
 
-#ifdef CK01
 void limit_order_create_evaluator::do_apply( const limit_order_create_operation& o )
 {
    FC_ASSERT( o.expiration > _db.head_block_time(), "Limit order has to expire after head block time." );
@@ -1944,32 +1938,24 @@ void limit_order_cancel_evaluator::do_apply( const limit_order_cancel_operation&
 {
    _db.cancel_order( _db.get_limit_order( o.owner, o.orderid ) );
 }
-#endif // CK01
 
 void report_over_production_evaluator::do_apply( const report_over_production_operation& o )
 {
-#ifdef CK01
    FC_ASSERT( !_db.has_hardfork( STEEM_HARDFORK_0_4 ), "report_over_production_operation is disabled." );
-#endif // CK01
 }
 
 void placeholder_a_evaluator::do_apply( const placeholder_a_operation& o )
 {
-#ifdef CK01
    FC_ASSERT( false, "This is not a valid op." );
-#endif // CK01
 }
 
 void placeholder_b_evaluator::do_apply( const placeholder_b_operation& o )
 {
-#ifdef CK01
    FC_ASSERT( false, "This is not a valid op" );
-#endif // CK01
 }
 
 void request_account_recovery_evaluator::do_apply( const request_account_recovery_operation& o )
 {
-#ifdef CK01
    const auto& account_to_recover = _db.get_account( o.account_to_recover );
 
    if ( account_to_recover.recovery_account.length() )   // Make sure recovery matches expected recovery account
@@ -2024,12 +2010,10 @@ void request_account_recovery_evaluator::do_apply( const request_account_recover
          req.expires = _db.head_block_time() + STEEM_ACCOUNT_RECOVERY_REQUEST_EXPIRATION_PERIOD;
       });
    }
-#endif // CK01
 }
 
 void recover_account_evaluator::do_apply( const recover_account_operation& o )
 {
-#ifdef CK01
    const auto& account = _db.get_account( o.account_to_recover );
 
    if( _db.has_hardfork( STEEM_HARDFORK_0_12 ) )
@@ -2060,12 +2044,10 @@ void recover_account_evaluator::do_apply( const recover_account_operation& o )
    {
       a.last_account_recovery = _db.head_block_time();
    });
-#endif // CK01
 }
 
 void change_recovery_account_evaluator::do_apply( const change_recovery_account_operation& o )
 {
-#ifdef CK01
    _db.get_account( o.new_recovery_account ); // Simply validate account exists
    const auto& account_to_recover = _db.get_account( o.account_to_recover );
 
@@ -2093,24 +2075,20 @@ void change_recovery_account_evaluator::do_apply( const change_recovery_account_
    {
       _db.remove( *request );
    }
-#endif // CK01
 }
 
 void transfer_to_savings_evaluator::do_apply( const transfer_to_savings_operation& op )
 {
-#ifdef CK01
    const auto& from = _db.get_account( op.from );
    const auto& to   = _db.get_account(op.to);
 //    FC_ASSERT( _db.get_balance( from, op.amount.symbol ) >= op.amount, "Account does not have sufficient funds to transfer to savings." );
 
    _db.adjust_balance( from, -op.amount );
    _db.adjust_savings_balance( to, op.amount );
-#endif // CK01
 }
 
 void transfer_from_savings_evaluator::do_apply( const transfer_from_savings_operation& op )
 {
-#ifdef CK01
    const auto& from = _db.get_account( op.from );
    _db.get_account(op.to); // Verify to account exists
 
@@ -2133,12 +2111,10 @@ void transfer_from_savings_evaluator::do_apply( const transfer_from_savings_oper
    {
       a.savings_withdraw_requests++;
    });
-#endif // CK01
 }
 
 void cancel_transfer_from_savings_evaluator::do_apply( const cancel_transfer_from_savings_operation& op )
 {
-#ifdef CK01
    const auto& swo = _db.get_savings_withdraw( op.from, op.request_id );
    _db.adjust_savings_balance( _db.get_account( swo.from ), swo.amount );
    _db.remove( swo );
@@ -2148,12 +2124,10 @@ void cancel_transfer_from_savings_evaluator::do_apply( const cancel_transfer_fro
    {
       a.savings_withdraw_requests--;
    });
-#endif // CK01
 }
 
 void decline_voting_rights_evaluator::do_apply( const decline_voting_rights_operation& o )
 {
-#ifdef CK01
    FC_ASSERT( _db.has_hardfork( STEEM_HARDFORK_0_14__324 ) );
 
    const auto& account = _db.get_account( o.account );
@@ -2175,12 +2149,10 @@ void decline_voting_rights_evaluator::do_apply( const decline_voting_rights_oper
       FC_ASSERT( itr != request_idx.end(), "Cannot cancel the request because it does not exist." );
       _db.remove( *itr );
    }
-#endif // CK01
 }
 
 void reset_account_evaluator::do_apply( const reset_account_operation& op )
 {
-#ifdef CK01
    FC_ASSERT( false, "Reset Account Operation is currently disabled." );
 /*
    const auto& acnt = _db.get_account( op.account_to_reset );
@@ -2191,12 +2163,10 @@ void reset_account_evaluator::do_apply( const reset_account_operation& op )
 
    _db.update_owner_authority( acnt, op.new_owner_authority );
 */
-#endif // CK01
 }
 
 void set_reset_account_evaluator::do_apply( const set_reset_account_operation& op )
 {
-#ifdef CK01
    FC_ASSERT( false, "Set Reset Account Operation is currently disabled." );
 /*
    const auto& acnt = _db.get_account( op.account );
@@ -2210,12 +2180,10 @@ void set_reset_account_evaluator::do_apply( const set_reset_account_operation& o
        a.reset_account = op.reset_account;
    });
 */
-#endif // CK01
 }
 
 void claim_reward_balance_evaluator::do_apply( const claim_reward_balance_operation& op )
 {
-#ifdef CK01
    const auto& acnt = _db.get_account( op.account );
 
 //    FC_ASSERT( op.reward_steem <= acnt.reward_steem_balance, "Cannot claim that much STEEM. Claim: ${c} Actual: ${a}",
@@ -2254,7 +2222,6 @@ void claim_reward_balance_evaluator::do_apply( const claim_reward_balance_operat
    });
 
    _db.adjust_proxied_witness_votes( acnt, op.reward_vests.amount );
-#endif // CK01
 }
 
 #ifdef STEEM_ENABLE_SMT
@@ -2327,7 +2294,6 @@ void claim_reward_balance2_evaluator::do_apply( const claim_reward_balance2_oper
 }
 #endif
 
-#ifdef CK01
 void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_operation& op )
 {
    const auto& delegator = _db.get_account( op.delegator );

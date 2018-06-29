@@ -201,6 +201,7 @@ namespace steem { namespace chain {
          time_point_sec    last_valid_time;
    };
 
+#ifdef CK01
    class account_recovery_request_object : public object< account_recovery_request_object_type, account_recovery_request_object >
    {
       account_recovery_request_object() = delete;
@@ -235,6 +236,7 @@ namespace steem { namespace chain {
          account_name_type recovery_account;
          time_point_sec    effective_on;
    };
+#endif // CK01
 
    struct by_name;
    struct by_proxy;
@@ -355,7 +357,6 @@ namespace steem { namespace chain {
       >,
       allocator< vesting_delegation_expiration_object >
    > vesting_delegation_expiration_index;
-#endif // CK01
 
    struct by_expiration;
 
@@ -404,6 +405,7 @@ namespace steem { namespace chain {
       >,
       allocator< change_recovery_account_request_object >
    > change_recovery_account_request_index;
+#endif // CK01
 } }
 
 FC_REFLECT( steem::chain::account_object,
@@ -445,6 +447,7 @@ FC_REFLECT( steem::chain::owner_authority_history_object,
           )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::owner_authority_history_object, steem::chain::owner_authority_history_index )
 
+#ifdef CK01
 FC_REFLECT( steem::chain::account_recovery_request_object,
              (id)(account_to_recover)(new_owner_authority)(expires)
           )
@@ -454,3 +457,4 @@ FC_REFLECT( steem::chain::change_recovery_account_request_object,
              (id)(account_to_recover)(recovery_account)(effective_on)
           )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::change_recovery_account_request_object, steem::chain::change_recovery_account_request_index )
+#endif // CK01

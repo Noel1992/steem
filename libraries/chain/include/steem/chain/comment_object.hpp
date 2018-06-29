@@ -11,7 +11,9 @@
 
 namespace steem { namespace chain {
 
+#ifdef CK01
    using protocol::beneficiary_route_type;
+#endif // CK01
 
    struct strcmp_less
    {
@@ -44,7 +46,11 @@ namespace steem { namespace chain {
       public:
          template< typename Constructor, typename Allocator >
          comment_object( Constructor&& c, allocator< Allocator > a )
+#ifdef CK01
             :category( a ), parent_permlink( a ), permlink( a ), beneficiaries( a )
+#else
+            :category( a ), parent_permlink( a ), permlink( a )
+#endif // CK01
          {
             c( *this );
          }
@@ -95,8 +101,10 @@ namespace steem { namespace chain {
          bool              allow_votes   = true;      /// allows a post to receive votes;
          bool              allow_curation_rewards = true;
 
+#ifdef CK01
          typedef bip::vector< beneficiary_route_type, allocator< beneficiary_route_type > > t_beneficiaries;
          t_beneficiaries   beneficiaries;
+#endif // CK01
    };
 
    class comment_content_object : public object< comment_content_object_type, comment_content_object >
@@ -275,7 +283,9 @@ FC_REFLECT( steem::chain::comment_object,
              (children_abs_rshares)(cashout_time)(max_cashout_time)
              (total_vote_weight)(reward_weight)(total_payout_value)(curator_payout_value)(beneficiary_payout_value)(author_rewards)(net_votes)(root_comment)
              (max_accepted_payout)(percent_steem_dollars)(allow_replies)(allow_votes)(allow_curation_rewards)
+#ifdef CK01
              (beneficiaries)
+#endif // CK01
           )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::comment_object, steem::chain::comment_index )
 
@@ -299,7 +309,9 @@ namespace helpers
    {
    public:
       typedef steem::chain::comment_index IndexType;
+#ifdef CK01
       typedef typename steem::chain::comment_object::t_beneficiaries t_beneficiaries;
+#endif // CK01
 
       index_statistic_info gather_statistics(const IndexType& index, bool onlyStaticInfo) const
       {
@@ -313,7 +325,9 @@ namespace helpers
                info._item_additional_allocation += o.category.capacity()*sizeof(shared_string::value_type);
                info._item_additional_allocation += o.parent_permlink.capacity()*sizeof(shared_string::value_type);
                info._item_additional_allocation += o.permlink.capacity()*sizeof(shared_string::value_type);
+#ifdef CK01
                info._item_additional_allocation += o.beneficiaries.capacity()*sizeof(t_beneficiaries::value_type);
+#endif // CK01
             }
          }
 

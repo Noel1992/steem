@@ -83,6 +83,7 @@ namespace steem { namespace protocol {
       }
    }
 
+#ifdef CK01
    struct comment_options_extension_validate_visitor
    {
       typedef void result_type;
@@ -148,7 +149,6 @@ namespace steem { namespace protocol {
       FC_ASSERT( false, "This is not a valid op" );
    }
 
-#ifdef CK01
    void vote_operation::validate() const
    {
       validate_account_name( voter );
@@ -198,7 +198,9 @@ namespace steem { namespace protocol {
       FC_ASSERT( url.size() > 0, "URL size must be greater than 0" );
       FC_ASSERT( fc::is_utf8( url ), "URL is not valid UTF8" );
       FC_ASSERT( fee >= asset( 0, STEEM_SYMBOL ), "Fee cannot be negative" );
+#ifdef CK01
       props.validate< false >();
+#endif // CK01
    }
 
    void witness_set_properties_operation::validate() const
@@ -286,6 +288,7 @@ namespace steem { namespace protocol {
       FC_ASSERT( proxy != account, "Cannot proxy to self" );
    }
 
+#ifdef CK01
    void custom_operation::validate() const {
       /// required auth accounts are the ones whose bandwidth is consumed
       FC_ASSERT( required_auths.size() > 0, "at least on account must be specified" );
@@ -436,7 +439,6 @@ namespace steem { namespace protocol {
       exchange_rate.validate();
    }
 
-#ifdef CK01
    void limit_order_create_operation::validate()const
    {
       validate_account_name( owner );
@@ -482,7 +484,6 @@ namespace steem { namespace protocol {
    {
       validate_account_name( owner );
    }
-#endif // CK01
 
    void convert_operation::validate()const
    {
@@ -657,7 +658,6 @@ namespace steem { namespace protocol {
    }
 #endif
 
-#ifdef CK01
    void delegate_vesting_shares_operation::validate()const
    {
       validate_account_name( delegator );

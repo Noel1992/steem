@@ -25,26 +25,21 @@ STEEM_DEFINE_EVALUATOR( withdraw_vesting )
 STEEM_DEFINE_EVALUATOR( set_withdraw_vesting_route )
 #endif // CK01
 STEEM_DEFINE_EVALUATOR( comment )
+#ifdef CK01
 STEEM_DEFINE_EVALUATOR( comment_options )
 STEEM_DEFINE_EVALUATOR( delete_comment )
-#ifdef CK01
 STEEM_DEFINE_EVALUATOR( vote )
-#endif // CK01
 STEEM_DEFINE_EVALUATOR( custom )
 STEEM_DEFINE_EVALUATOR( custom_json )
 STEEM_DEFINE_EVALUATOR( custom_binary )
 STEEM_DEFINE_EVALUATOR( pow )
-STEEM_DEFINE_EVALUATOR( pow2 )
+STEEM_DEFINE_EVALUATOR( pow2)
 STEEM_DEFINE_EVALUATOR( feed_publish )
 STEEM_DEFINE_EVALUATOR( convert )
-#ifdef CK01
 STEEM_DEFINE_EVALUATOR( limit_order_create )
 STEEM_DEFINE_EVALUATOR( limit_order_cancel )
-#endif // CK01
 STEEM_DEFINE_EVALUATOR( report_over_production )
-#ifdef CK01
 STEEM_DEFINE_EVALUATOR( limit_order_create2 )
-#endif // CK01
 STEEM_DEFINE_EVALUATOR( escrow_transfer )
 STEEM_DEFINE_EVALUATOR( escrow_approve )
 STEEM_DEFINE_EVALUATOR( escrow_dispute )
@@ -64,7 +59,6 @@ STEEM_DEFINE_EVALUATOR( claim_reward_balance )
 #ifdef STEEM_ENABLE_SMT
 STEEM_DEFINE_EVALUATOR( claim_reward_balance2 )
 #endif
-#ifdef CK01
 STEEM_DEFINE_EVALUATOR( delegate_vesting_shares )
 #endif // CK01
 STEEM_DEFINE_EVALUATOR( witness_set_properties )

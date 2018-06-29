@@ -40,7 +40,6 @@ namespace steem { namespace chain {
          asset             amount;
          time_point_sec    conversion_date; ///< at this time the feed_history_median_price * amount
    };
-#endif // CK01
 
 
    class escrow_object : public object< escrow_object_type, escrow_object >
@@ -95,7 +94,6 @@ namespace steem { namespace chain {
          time_point_sec    complete;
    };
 
-#ifdef CK01
    /**
     *  If last_update is greater than 1 week, then volume gets reset to 0
     *
@@ -148,7 +146,6 @@ namespace steem { namespace chain {
             return ( steem_volume > 0 && sbd_volume > 0 ) ? 1 : 0;
          }
    };
-#endif // CK01
 
 
    /**
@@ -172,7 +169,6 @@ namespace steem { namespace chain {
          bip::deque< price, allocator< price > >   price_history; ///< tracks this last week of median_feed one per hour
    };
 
-#ifdef CK01
    /**
     *  @brief an offer to sell a amount of a asset at a specified exchange rate by a certain time
     *  @ingroup object
@@ -233,7 +229,6 @@ namespace steem { namespace chain {
          uint16_t          percent = 0;
          bool              auto_vest = false;
    };
-#endif // CK01
 
 
    class decline_voting_rights_request_object : public object< decline_voting_rights_request_object_type, decline_voting_rights_request_object >
@@ -276,7 +271,6 @@ namespace steem { namespace chain {
          protocol::curve_id                curation_reward_curve;
    };
 
-#ifdef CK01
    struct by_price;
    struct by_expiration;
    struct by_account;
@@ -342,7 +336,6 @@ namespace steem { namespace chain {
       >,
       allocator< liquidity_reward_balance_object >
    > liquidity_reward_balance_index;
-#endif // CK01
 
    typedef multi_index_container<
       feed_history_object,
@@ -352,7 +345,6 @@ namespace steem { namespace chain {
       allocator< feed_history_object >
    > feed_history_index;
 
-#ifdef CK01
    struct by_withdraw_route;
    struct by_destination;
    typedef multi_index_container<
@@ -375,7 +367,6 @@ namespace steem { namespace chain {
       >,
       allocator< withdraw_vesting_route_object >
    > withdraw_vesting_route_index;
-#endif // CK01
 
    struct by_from_id;
    struct by_ratification_deadline;
@@ -461,6 +452,7 @@ namespace steem { namespace chain {
       >,
       allocator< reward_fund_object >
    > reward_fund_index;
+#endif // CK01
 
 } } // steem::chain
 
@@ -471,13 +463,11 @@ namespace steem { namespace chain {
 FC_REFLECT( steem::chain::limit_order_object,
              (id)(created)(expiration)(seller)(orderid)(for_sale)(sell_price) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::limit_order_object, steem::chain::limit_order_index )
-#endif // CK01
 
 FC_REFLECT( steem::chain::feed_history_object,
              (id)(current_median_history)(price_history) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::feed_history_object, steem::chain::feed_history_index )
 
-#ifdef CK01
 FC_REFLECT( steem::chain::convert_request_object,
              (id)(owner)(requestid)(amount)(conversion_date) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::convert_request_object, steem::chain::convert_request_index )
@@ -489,7 +479,6 @@ CHAINBASE_SET_INDEX_TYPE( steem::chain::liquidity_reward_balance_object, steem::
 FC_REFLECT( steem::chain::withdraw_vesting_route_object,
              (id)(from_account)(to_account)(percent)(auto_vest) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::withdraw_vesting_route_object, steem::chain::withdraw_vesting_route_index )
-#endif // CK01
 
 FC_REFLECT( steem::chain::savings_withdraw_object,
              (id)(from)(to)(memo)(request_id)(amount)(complete) )
@@ -519,3 +508,4 @@ FC_REFLECT( steem::chain::reward_fund_object,
             (curation_reward_curve)
          )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::reward_fund_object, steem::chain::reward_fund_index )
+#endif // CK01

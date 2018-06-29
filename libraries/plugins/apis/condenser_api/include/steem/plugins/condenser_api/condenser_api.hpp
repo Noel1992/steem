@@ -685,8 +685,10 @@ struct discussion
         , allow_votes(o.allow_votes)
         , allow_curation_rewards(o.allow_curation_rewards)
   {
+#ifdef CK01
     for (const auto & b : o.beneficiaries)
       beneficiaries.push_back(b);
+#endif // CK01
     const auto root = db.find(o.root_comment);
     if (root != nullptr) {
       root_author = root->author;
@@ -748,7 +750,9 @@ struct discussion
    bool              allow_replies = false;
    bool              allow_votes = false;
    bool              allow_curation_rewards = false;
+#ifdef CK01
    vector< beneficiary_route_type > beneficiaries;
+#endif // CK01
 
    string                        url; /// /category/@rootauthor/root_permlink#author/permlink
    string                        root_title;
@@ -1328,7 +1332,6 @@ FC_REFLECT( steem::plugins::condenser_api::discussion,
                 (total_vote_weight)(reward_weight)(author_rewards)(net_votes)
                 (root_author)(root_permlink)
                 (percent_steem_dollars)(allow_replies)(allow_votes)(allow_curation_rewards)
-                (beneficiaries)
                 (url)(root_title)
                 (replies)(author_reputation)
                 (body_length)(reblogged_by)(first_reblogged_by)(first_reblogged_on)

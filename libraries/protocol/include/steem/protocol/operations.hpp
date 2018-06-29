@@ -25,10 +25,10 @@ namespace steem { namespace protocol {
 
             limit_order_create_operation,
             limit_order_cancel_operation,
-#endif // CK01
 
             feed_publish_operation,
             convert_operation,
+#endif // CK01
 
             account_create_operation,
             account_update_operation,
@@ -37,6 +37,7 @@ namespace steem { namespace protocol {
             account_witness_vote_operation,
             account_witness_proxy_operation,
 
+#ifdef CK01
             pow_operation,
 
             custom_operation,
@@ -46,10 +47,8 @@ namespace steem { namespace protocol {
             delete_comment_operation,
             custom_json_operation,
             comment_options_operation,
-#ifdef CK01
             set_withdraw_vesting_route_operation,
             limit_order_create2_operation,
-#endif // CK01
             placeholder_a_operation,               // A new op can go here
             placeholder_b_operation,               // A new op can go here
             request_account_recovery_operation,
@@ -68,6 +67,7 @@ namespace steem { namespace protocol {
             reset_account_operation,
             set_reset_account_operation,
             claim_reward_balance_operation,
+#endif // CK01
 #ifdef STEEM_ENABLE_SMT
             claim_reward_balance2_operation,
 #endif
@@ -112,8 +112,8 @@ namespace steem { namespace protocol {
 
    void operation_validate( const operation& op );*/
 
-   bool is_market_operation( const operation& op );
 #ifdef CK01
+   bool is_market_operation( const operation& op );
    bool is_virtual_operation( const operation& op );
 #endif // CK01
 

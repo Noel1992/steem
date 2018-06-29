@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef CK01
 #include <cstdint>
 
 #include <steem/protocol/config.hpp>
@@ -47,3 +47,4 @@ inline share_type calc_percent_reward_per_round( share_type current_supply )
 }
 
 } }
+#endif // CK01
