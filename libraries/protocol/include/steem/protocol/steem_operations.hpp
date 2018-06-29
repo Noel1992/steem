@@ -24,7 +24,7 @@ namespace steem { namespace protocol {
       void get_required_active_authorities( flat_set<account_name_type>& a )const{ a.insert(creator); }
    };
 
-
+#ifdef CK01
    struct account_create_with_delegation_operation : public base_operation
    {
       asset             fee;
@@ -42,6 +42,7 @@ namespace steem { namespace protocol {
       void validate()const;
       void get_required_active_authorities( flat_set<account_name_type>& a )const{ a.insert(creator); }
    };
+#endif // CK01
 
 
    struct account_update_operation : public base_operation
@@ -485,7 +486,7 @@ namespace steem { namespace protocol {
       void validate()const;
       void get_required_active_authorities( flat_set<account_name_type>& a )const{ a.insert(owner); }
    };
-
+   
    struct witness_set_properties_operation : public base_operation
    {
       account_name_type                   owner;
@@ -1022,6 +1023,7 @@ namespace steem { namespace protocol {
    };
 #endif
 
+   #ifdef CK01
    /**
     * Delegate vesting shares from one account to the other. The vesting shares are still owned
     * by the original account, but content voting rights and bandwidth allocation are transferred
@@ -1040,6 +1042,7 @@ namespace steem { namespace protocol {
       void get_required_active_authorities( flat_set< account_name_type >& a ) const { a.insert( delegator ); }
       void validate() const;
    };
+   #endif // CK01
 } } // steem::protocol
 
 
@@ -1077,7 +1080,7 @@ FC_REFLECT( steem::protocol::account_create_operation,
             (posting)
             (memo_key)
             (json_metadata) )
-
+#ifdef CK01
 FC_REFLECT( steem::protocol::account_create_with_delegation_operation,
             (fee)
             (delegation)
@@ -1089,6 +1092,7 @@ FC_REFLECT( steem::protocol::account_create_with_delegation_operation,
             (memo_key)
             (json_metadata)
             (extensions) )
+#endif // CK01
 
 FC_REFLECT( steem::protocol::account_update_operation,
             (account)
@@ -1148,4 +1152,6 @@ FC_REFLECT( steem::protocol::claim_reward_balance_operation, (account)(reward_st
 #ifdef STEEM_ENABLE_SMT
 FC_REFLECT( steem::protocol::claim_reward_balance2_operation, (account)(extensions)(reward_tokens) )
 #endif
+#ifdef CK01
 FC_REFLECT( steem::protocol::delegate_vesting_shares_operation, (delegator)(delegatee)(vesting_shares) );
+#endif // CK01

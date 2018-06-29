@@ -85,10 +85,14 @@ class comment_content_object;
 class comment_vote_object;
 #endif // CK01
 class witness_vote_object;
+#ifdef CK01
 class limit_order_object;
+#endif // CK01
 class feed_history_object;
+#ifdef CK01
 class convert_request_object;
 class liquidity_reward_balance_object;
+#endif // CK01
 class operation_object;
 class account_history_object;
 class hardfork_property_object;
@@ -103,8 +107,10 @@ class savings_withdraw_object;
 class decline_voting_rights_request_object;
 class block_stats_object;
 class reward_fund_object;
+#ifdef CK01
 class vesting_delegation_object;
 class vesting_delegation_expiration_object;
+#endif // CK01
 
 #ifdef STEEM_ENABLE_SMT
 class smt_token_object;
@@ -126,10 +132,14 @@ typedef oid< comment_content_object                 > comment_content_id_type;
 typedef oid< comment_vote_object                    > comment_vote_id_type;
 #endif // CK01
 typedef oid< witness_vote_object                    > witness_vote_id_type;
+#ifdef CK01
 typedef oid< limit_order_object                     > limit_order_id_type;
+#endif // CK01
 typedef oid< feed_history_object                    > feed_history_id_type;
+#ifdef CK01
 typedef oid< convert_request_object                 > convert_request_id_type;
 typedef oid< liquidity_reward_balance_object        > liquidity_reward_balance_id_type;
+#endif // CK01
 typedef oid< operation_object                       > operation_id_type;
 typedef oid< account_history_object                 > account_history_id_type;
 typedef oid< hardfork_property_object               > hardfork_property_id_type;
@@ -144,8 +154,10 @@ typedef oid< savings_withdraw_object                > savings_withdraw_id_type;
 typedef oid< decline_voting_rights_request_object   > decline_voting_rights_request_id_type;
 typedef oid< block_stats_object                     > block_stats_id_type;
 typedef oid< reward_fund_object                     > reward_fund_id_type;
+#ifdef CK01
 typedef oid< vesting_delegation_object              > vesting_delegation_id_type;
 typedef oid< vesting_delegation_expiration_object   > vesting_delegation_expiration_id_type;
+#endif // CK01
 
 #ifdef STEEM_ENABLE_SMT
 typedef oid< smt_token_object                       > smt_token_id_type;

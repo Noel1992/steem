@@ -145,6 +145,7 @@ namespace steem { namespace chain {
          time_point_sec    last_owner_update;
    };
 
+#ifdef CK01
    class vesting_delegation_object : public object< vesting_delegation_object_type, vesting_delegation_object >
    {
       public:
@@ -179,6 +180,7 @@ namespace steem { namespace chain {
          asset             vesting_shares;
          time_point_sec    expiration;
    };
+#endif // CK01
 
    class owner_authority_history_object : public object< owner_authority_history_object_type, owner_authority_history_object >
    {
@@ -308,6 +310,7 @@ namespace steem { namespace chain {
       allocator< account_authority_object >
    > account_authority_index;
 
+#ifdef CK01
    struct by_delegation;
 
    typedef multi_index_container <
@@ -352,6 +355,7 @@ namespace steem { namespace chain {
       >,
       allocator< vesting_delegation_expiration_object >
    > vesting_delegation_expiration_index;
+#endif // CK01
 
    struct by_expiration;
 
@@ -426,6 +430,7 @@ FC_REFLECT( steem::chain::account_authority_object,
 )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::account_authority_object, steem::chain::account_authority_index )
 
+#ifdef CK01
 FC_REFLECT( steem::chain::vesting_delegation_object,
             (id)(delegator)(delegatee)(vesting_shares)(min_delegation_time) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::vesting_delegation_object, steem::chain::vesting_delegation_index )
@@ -433,6 +438,7 @@ CHAINBASE_SET_INDEX_TYPE( steem::chain::vesting_delegation_object, steem::chain:
 FC_REFLECT( steem::chain::vesting_delegation_expiration_object,
             (id)(delegator)(vesting_shares)(expiration) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::vesting_delegation_expiration_object, steem::chain::vesting_delegation_expiration_index )
+#endif // CK01
 
 FC_REFLECT( steem::chain::owner_authority_history_object,
              (id)(account)(previous_owner_authority)(last_valid_time)

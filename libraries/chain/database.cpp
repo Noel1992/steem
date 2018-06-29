@@ -2292,9 +2292,9 @@ void database::initialize_evaluators()
    _my->_evaluator_registry.register_evaluator< claim_reward_balance_evaluator           >();
 #ifdef STEEM_ENABLE_SMT
    _my->_evaluator_registry.register_evaluator< claim_reward_balance2_evaluator          >();
-#endif
    _my->_evaluator_registry.register_evaluator< account_create_with_delegation_evaluator >();
    _my->_evaluator_registry.register_evaluator< delegate_vesting_shares_evaluator        >();
+#endif
    _my->_evaluator_registry.register_evaluator< witness_set_properties_evaluator         >();
 
 #ifdef STEEM_ENABLE_SMT
@@ -2361,8 +2361,10 @@ void database::initialize_indexes()
    add_core_index< savings_withdraw_index                  >(*this);
    add_core_index< decline_voting_rights_request_index     >(*this);
    add_core_index< reward_fund_index                       >(*this);
+#ifdef CK01
    add_core_index< vesting_delegation_index                >(*this);
    add_core_index< vesting_delegation_expiration_index     >(*this);
+#endif // CK01
 #ifdef STEEM_ENABLE_SMT
    add_core_index< smt_token_index                         >(*this);
    add_core_index< account_regular_balance_index           >(*this);
@@ -4251,6 +4253,7 @@ void database::apply_hardfork( uint32_t hardfork )
                rfo.curation_reward_curve = curve_id::square_root;
             });
 
+#ifdef CK01
             /* Remove all 0 delegation objects */
             vector< const vesting_delegation_object* > to_remove;
             const auto& delegation_idx = get_index< vesting_delegation_index, by_id >();
@@ -4268,6 +4271,7 @@ void database::apply_hardfork( uint32_t hardfork )
             {
                remove( *delegation_ptr );
             }
+#endif // CK01
          }
          break;
 #ifdef IS_TEST_NET

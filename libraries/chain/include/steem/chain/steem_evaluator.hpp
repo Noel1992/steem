@@ -9,7 +9,9 @@ namespace steem { namespace chain {
 using namespace steem::protocol;
 
 STEEM_DEFINE_EVALUATOR( account_create )
+#ifdef CK01
 STEEM_DEFINE_EVALUATOR( account_create_with_delegation )
+#endif // CK01
 STEEM_DEFINE_EVALUATOR( account_update )
 #ifdef CK01
 STEEM_DEFINE_EVALUATOR( transfer )
@@ -62,7 +64,9 @@ STEEM_DEFINE_EVALUATOR( claim_reward_balance )
 #ifdef STEEM_ENABLE_SMT
 STEEM_DEFINE_EVALUATOR( claim_reward_balance2 )
 #endif
+#ifdef CK01
 STEEM_DEFINE_EVALUATOR( delegate_vesting_shares )
+#endif // CK01
 STEEM_DEFINE_EVALUATOR( witness_set_properties )
 #ifdef STEEM_ENABLE_SMT
 STEEM_DEFINE_EVALUATOR( smt_setup )

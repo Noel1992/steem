@@ -23,6 +23,7 @@ namespace steem { namespace protocol {
       FC_ASSERT( fee >= asset( 0, STEEM_SYMBOL ), "Account creation fee cannot be negative" );
    }
 
+#ifdef CK01
    void account_create_with_delegation_operation::validate() const
    {
       validate_account_name( new_account_name );
@@ -43,6 +44,7 @@ namespace steem { namespace protocol {
       FC_ASSERT( fee >= asset( 0, STEEM_SYMBOL ), "Account creation fee cannot be negative" );
       FC_ASSERT( delegation >= asset( 0, VESTS_SYMBOL ), "Delegation cannot be negative" );
    }
+#endif // CK01
 
    void account_update_operation::validate() const
    {
@@ -655,6 +657,7 @@ namespace steem { namespace protocol {
    }
 #endif
 
+#ifdef CK01
    void delegate_vesting_shares_operation::validate()const
    {
       validate_account_name( delegator );
@@ -663,5 +666,6 @@ namespace steem { namespace protocol {
       FC_ASSERT( is_asset_type( vesting_shares, VESTS_SYMBOL ), "Delegation must be VESTS" );
       FC_ASSERT( vesting_shares >= asset( 0, VESTS_SYMBOL ), "Delegation cannot be negative" );
    }
+#endif // CK01
 
 } } // steem::protocol

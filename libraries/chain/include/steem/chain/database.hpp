@@ -154,9 +154,10 @@ namespace steem { namespace chain {
 
          const escrow_object&   get_escrow(  const account_name_type& name, uint32_t escrow_id )const;
          const escrow_object*   find_escrow( const account_name_type& name, uint32_t escrow_id )const;
-
+#ifdef CK01
          const limit_order_object& get_limit_order(  const account_name_type& owner, uint32_t id )const;
          const limit_order_object* find_limit_order( const account_name_type& owner, uint32_t id )const;
+#endif // CK01
 
          const savings_withdraw_object& get_savings_withdraw(  const account_name_type& owner, uint32_t request_id )const;
          const savings_withdraw_object* find_savings_withdraw( const account_name_type& owner, uint32_t request_id )const;

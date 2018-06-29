@@ -316,6 +316,7 @@ void account_create_evaluator::do_apply( const account_create_operation& o )
       _db.create_vesting( new_account, o.fee );
 }
 
+#ifdef CK01
 void account_create_with_delegation_evaluator::do_apply( const account_create_with_delegation_operation& o )
 {
    FC_ASSERT( !_db.has_hardfork( STEEM_HARDFORK_0_20__1760 ), "Account creation with delegation is deprecated as of Hardfork 20" );
@@ -408,6 +409,7 @@ void account_create_with_delegation_evaluator::do_apply( const account_create_wi
    if( o.fee.amount > 0 )
       _db.create_vesting( new_account, o.fee );
 }
+#endif // CK01
 
 
 void account_update_evaluator::do_apply( const account_update_operation& o )
@@ -2325,9 +2327,9 @@ void claim_reward_balance2_evaluator::do_apply( const claim_reward_balance2_oper
 }
 #endif
 
+#ifdef CK01
 void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_operation& op )
 {
-#ifdef CK01
    const auto& delegator = _db.get_account( op.delegator );
    const auto& delegatee = _db.get_account( op.delegatee );
    auto delegation = _db.find< vesting_delegation_object, by_delegation >( boost::make_tuple( op.delegator, op.delegatee ) );
@@ -2425,7 +2427,7 @@ void delegate_vesting_shares_evaluator::do_apply( const delegate_vesting_shares_
          _db.remove( *delegation );
       }
    }
-#endif // CK01
 }
+#endif // CK01
 
 } } // steem::chain
