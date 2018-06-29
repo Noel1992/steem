@@ -309,8 +309,9 @@ namespace steem { namespace chain {
          std::pair< asset, asset > create_sbd( const account_object& to_account, asset steem, bool to_reward_balance=false );
          asset create_vesting( const account_object& to_account, asset steem, bool to_reward_balance=false );
          void adjust_total_payout( const comment_object& a, const asset& sbd, const asset& curator_sbd_value, const asset& beneficiary_value );
-
+#ifdef CK01
          void        adjust_liquidity_reward( const account_object& owner, const asset& volume, bool is_bid );
+#endif // CK01
          void        adjust_balance( const account_object& a, const asset& delta );
          void        adjust_balance( const account_name_type& name, const asset& delta );
          void        adjust_savings_balance( const account_object& a, const asset& delta );
@@ -346,12 +347,12 @@ namespace steem { namespace chain {
 #ifdef CK01
          void process_vesting_withdrawals();
          share_type pay_curators( const comment_object& c, share_type& max_rewards );
-#endif // CK01
          share_type cashout_comment_helper( util::comment_reward_context& ctx, const comment_object& comment );
          void process_comment_cashout();
          void process_funds();
          void process_conversions();
          void process_savings_withdraws();
+#endif // CK01
          void account_recovery_processing();
          void expire_escrow_ratification();
          void process_decline_voting_rights();
@@ -359,15 +360,18 @@ namespace steem { namespace chain {
 
          asset get_liquidity_reward()const;
          asset get_content_reward()const;
+#ifdef CK01
          asset get_producer_reward();
+#endif // CK01
          asset get_curation_reward()const;
          asset get_pow_reward()const;
 
          uint16_t get_curation_rewards_percent( const comment_object& c ) const;
 
          share_type pay_reward_funds( share_type reward );
-
+#ifdef CK01
          void  pay_liquidity_reward();
+#endif // CK01
 
          /**
           * Helper method to return the current sbd value of a given amount of
@@ -420,7 +424,9 @@ namespace steem { namespace chain {
          void retally_comment_children();
          void retally_witness_votes();
          void retally_witness_vote_counts( bool force = false );
+#ifdef CK01
          void retally_liquidity_weight();
+#endif // CK01
          void update_virtual_supply();
 
          bool has_hardfork( uint32_t hardfork )const;
@@ -496,8 +502,8 @@ namespace steem { namespace chain {
          void clear_expired_transactions();
          #ifdef CK01
          void clear_expired_orders();
-         #endif // CK01
          void clear_expired_delegations();
+         #endif // CK01
          void process_header_extensions( const signed_block& next_block );
 
          void init_hardforks();

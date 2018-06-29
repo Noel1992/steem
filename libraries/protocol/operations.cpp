@@ -21,6 +21,7 @@ bool is_market_operation( const operation& op ) {
    return op.visit( is_market_op_visitor() );
 }
 
+#ifdef CK01
 struct is_vop_visitor
 {
    typedef bool result_type;
@@ -33,7 +34,7 @@ bool is_virtual_operation( const operation& op )
 {
    return op.visit( is_vop_visitor() );
 }
-
+#endif // CK01
 } } // steem::protocol
 
 STEEM_DEFINE_OPERATION_TYPE( steem::protocol::operation )

@@ -934,6 +934,7 @@ void database::notify_post_apply_operation( const operation_notification& note )
    STEEM_TRY_NOTIFY( post_apply_operation, note )
 }
 
+#ifdef CK01
 inline const void database::push_virtual_operation( const operation& op, bool force )
 {
    /*
@@ -950,6 +951,7 @@ inline const void database::push_virtual_operation( const operation& op, bool fo
    notify_pre_apply_operation( note );
    notify_post_apply_operation( note );
 }
+#endif // CK01
 
 void database::notify_applied_block( const signed_block& block )
 {
@@ -1572,6 +1574,7 @@ void fill_comment_reward_context_local_state( util::comment_reward_context& ctx,
    ctx.max_sbd = comment.max_accepted_payout;
 }
 
+#ifdef CK01
 share_type database::cashout_comment_helper( util::comment_reward_context& ctx, const comment_object& comment )
 {
    try
@@ -1933,6 +1936,7 @@ void database::process_savings_withdraws()
      itr = idx.begin();
   }
 }
+#endif // CK01
 
 asset database::get_liquidity_reward()const
 {
@@ -1961,6 +1965,7 @@ asset database::get_curation_reward()const
    return std::max( percent, STEEM_MIN_CURATE_REWARD );
 }
 
+#ifdef CK01
 asset database::get_producer_reward()
 {
    const auto& props = get_dynamic_global_properties();
@@ -1985,6 +1990,7 @@ asset database::get_producer_reward()
 
    return pay;
 }
+#endif // CK01
 
 asset database::get_pow_reward()const
 {
@@ -2002,7 +2008,7 @@ asset database::get_pow_reward()const
    return std::max( percent, STEEM_MIN_POW_REWARD );
 }
 
-
+#ifdef CK01
 void database::pay_liquidity_reward()
 {
 #ifdef IS_TEST_NET
@@ -2035,6 +2041,7 @@ void database::pay_liquidity_reward()
       }
    }
 }
+#endif // CK01
 
 uint16_t database::get_curation_rewards_percent( const comment_object& c ) const
 {
@@ -2070,6 +2077,7 @@ share_type database::pay_reward_funds( share_type reward )
    return used_rewards;
 }
 
+#ifdef CK01
 /**
  *  Iterates over all conversion requests with a conversion date before
  *  the head block time and then converts them to/from steem/sbd at the
@@ -2112,6 +2120,7 @@ void database::process_conversions()
        p.virtual_supply -= net_sbd * get_feed_history().current_median_history;
    } );
 }
+#endif // CK01
 
 asset database::to_sbd( const asset& steem )const
 {
@@ -2335,8 +2344,10 @@ void database::initialize_indexes()
    add_core_index< limit_order_index                       >(*this);
 #endif // CK01
    add_core_index< feed_history_index                      >(*this);
+#ifdef CK01
    add_core_index< convert_request_index                   >(*this);
    add_core_index< liquidity_reward_balance_index          >(*this);
+#endif // CK01
    add_core_index< operation_index                         >(*this);
    add_core_index< account_history_index                   >(*this);
    add_core_index< hardfork_property_index                 >(*this);
@@ -2814,22 +2825,22 @@ void database::_apply_block( const signed_block& next_block )
    clear_expired_transactions();
    #ifdef CK01
    clear_expired_orders();
-   #endif // CK01
    clear_expired_delegations();
+   #endif // CK01
    update_witness_schedule(*this);
 
    update_median_feed();
    update_virtual_supply();
 
    clear_null_account_balance();
+#ifdef CK01
    process_funds();
    process_conversions();
    process_comment_cashout();
-#ifdef CK01
    process_vesting_withdrawals();
-#endif // CK01
    process_savings_withdraws();
    pay_liquidity_reward();
+#endif // CK01
    update_virtual_supply();
 
    account_recovery_processing();
@@ -3120,7 +3131,9 @@ void database::update_global_dynamic_data( const signed_block& b )
                   if( head_block_num() - w.last_confirmed_block_num  > STEEM_BLOCKS_PER_DAY )
                   {
                      w.signing_key = public_key_type();
+#ifdef CK01
                      push_virtual_operation( shutdown_witness_operation( w.owner ) );
+#endif // CK01
                   }
                }
             } );
@@ -3380,7 +3393,6 @@ int database::match( const limit_order_object& new_order, const limit_order_obje
    }
    return result;
 }
-#endif // CK01
 
 
 void database::adjust_liquidity_reward( const account_object& owner, const asset& volume, bool is_sdb )
@@ -3423,7 +3435,6 @@ void database::adjust_liquidity_reward( const account_object& owner, const asset
    }
 }
 
-#ifdef CK01
 bool database::fill_order( const limit_order_object& order, const asset& pays, const asset& receives )
 {
    try
@@ -3503,7 +3514,6 @@ void database::clear_expired_orders()
       itr = orders_by_exp.begin();
    }
 }
-#endif // CK01
 
 void database::clear_expired_delegations()
 {
@@ -3523,6 +3533,7 @@ void database::clear_expired_delegations()
       itr = delegations_by_exp.begin();
    }
 }
+#endif // CK01
 #ifdef STEEM_ENABLE_SMT
 template< typename smt_balance_object_type >
 void database::adjust_smt_balance( const account_name_type& name, const asset& delta, bool check_account )
@@ -3597,10 +3608,10 @@ void database::modify_balance( const account_object& a, const asset& delta, bool
                   acnt.sbd_balance += interest_paid;
                   acnt.sbd_seconds = 0;
                   acnt.sbd_last_interest_payment = head_block_time();
-
+#ifdef CK01
                   if(interest > 0)
                      push_virtual_operation( interest_operation( a.name, interest_paid ) );
-
+#endif // CK01
                   modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& props)
                   {
                      props.current_sbd_supply += interest_paid;
@@ -3710,10 +3721,10 @@ void database::adjust_savings_balance( const account_object& a, const asset& del
                   acnt.savings_sbd_balance += interest_paid;
                   acnt.savings_sbd_seconds = 0;
                   acnt.savings_sbd_last_interest_payment = head_block_time();
-
+#ifdef CK01
                   if(interest > 0)
                      push_virtual_operation( interest_operation( a.name, interest_paid ) );
-
+#endif // CK01
                   modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& props)
                   {
                      props.current_sbd_supply += interest_paid;
@@ -4063,7 +4074,9 @@ void database::apply_hardfork( uint32_t hardfork )
          }
          break;
       case STEEM_HARDFORK_0_10:
+#ifdef CK01
          retally_liquidity_weight();
+#endif // CK01
          break;
       case STEEM_HARDFORK_0_11:
          break;
@@ -4276,10 +4289,12 @@ void database::apply_hardfork( uint32_t hardfork )
       hfp.current_hardfork_version = _hardfork_versions[ hardfork ];
       FC_ASSERT( hfp.processed_hardforks[ hfp.last_hardfork ] == _hardfork_times[ hfp.last_hardfork ], "Hardfork processing failed sanity check..." );
    } );
-
+#ifdef CK01
    push_virtual_operation( hardfork_operation( hardfork ), true );
+#endif // CK01
 }
 
+#ifdef CK01
 void database::retally_liquidity_weight() {
    const auto& ridx = get_index< liquidity_reward_balance_index >().indices().get< by_owner >();
    for( const auto& i : ridx ) {
@@ -4288,6 +4303,7 @@ void database::retally_liquidity_weight() {
       });
    }
 }
+#endif // CK01
 
 /**
  * Verifies all supply invariantes check out
@@ -4328,6 +4344,7 @@ void database::validate_invariants()const
                                       itr->vesting_shares.amount ) );
       }
 
+#ifdef CK01
       const auto& convert_request_idx = get_index< convert_request_index >().indices();
 
       for( auto itr = convert_request_idx.begin(); itr != convert_request_idx.end(); ++itr )
@@ -4340,7 +4357,6 @@ void database::validate_invariants()const
             FC_ASSERT( false, "Encountered illegal symbol in convert_request_object" );
       }
 
-#ifdef CK01
       const auto& limit_order_idx = get_index< limit_order_index >().indices();
 
       for( auto itr = limit_order_idx.begin(); itr != limit_order_idx.end(); ++itr )

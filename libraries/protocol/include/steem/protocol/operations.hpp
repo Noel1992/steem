@@ -73,8 +73,8 @@ namespace steem { namespace protocol {
 #endif
             delegate_vesting_shares_operation,
             account_create_with_delegation_operation,
-            witness_set_properties_operation,
-
+            witness_set_properties_operation
+#ifdef CK01
 #ifdef STEEM_ENABLE_SMT
             /// SMT operations
             smt_setup_operation,
@@ -101,6 +101,7 @@ namespace steem { namespace protocol {
             return_vesting_delegation_operation,
             comment_benefactor_reward_operation,
             producer_reward_operation
+#endif // CK01
          > operation;
 
    /*void operation_get_required_authorities( const operation& op,
@@ -112,8 +113,9 @@ namespace steem { namespace protocol {
    void operation_validate( const operation& op );*/
 
    bool is_market_operation( const operation& op );
-
+#ifdef CK01
    bool is_virtual_operation( const operation& op );
+#endif // CK01
 
 } } // steem::protocol
 

@@ -1,4 +1,5 @@
 #pragma once
+#ifdef CK01
 #include <steem/protocol/base.hpp>
 #include <steem/protocol/block_header.hpp>
 #include <steem/protocol/asset.hpp>
@@ -193,3 +194,4 @@ FC_REFLECT( steem::protocol::comment_payout_update_operation, (author)(permlink)
 FC_REFLECT( steem::protocol::return_vesting_delegation_operation, (account)(vesting_shares) )
 FC_REFLECT( steem::protocol::comment_benefactor_reward_operation, (benefactor)(author)(permlink)(reward) )
 FC_REFLECT( steem::protocol::producer_reward_operation, (producer)(vesting_shares) )
+#endif // CK01

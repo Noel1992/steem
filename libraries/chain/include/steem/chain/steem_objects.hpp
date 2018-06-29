@@ -18,6 +18,7 @@ namespace steem { namespace chain {
 
    typedef protocol::fixed_string< 16 > reward_fund_name_type;
 
+#ifdef CK01
    /**
     *  This object is used to track pending requests to convert sbd to steem
     */
@@ -39,6 +40,7 @@ namespace steem { namespace chain {
          asset             amount;
          time_point_sec    conversion_date; ///< at this time the feed_history_median_price * amount
    };
+#endif // CK01
 
 
    class escrow_object : public object< escrow_object_type, escrow_object >
@@ -93,7 +95,7 @@ namespace steem { namespace chain {
          time_point_sec    complete;
    };
 
-
+#ifdef CK01
    /**
     *  If last_update is greater than 1 week, then volume gets reset to 0
     *
@@ -146,6 +148,7 @@ namespace steem { namespace chain {
             return ( steem_volume > 0 && sbd_volume > 0 ) ? 1 : 0;
          }
    };
+#endif // CK01
 
 
    /**
@@ -169,7 +172,7 @@ namespace steem { namespace chain {
          bip::deque< price, allocator< price > >   price_history; ///< tracks this last week of median_feed one per hour
    };
 
-
+#ifdef CK01
    /**
     *  @brief an offer to sell a amount of a asset at a specified exchange rate by a certain time
     *  @ingroup object
@@ -209,7 +212,6 @@ namespace steem { namespace chain {
          asset amount_to_receive()const { return amount_for_sale() * sell_price; }
    };
 
-#ifdef CK01
    /**
     * @breif a route to send withdrawn vesting shares.
     */
@@ -299,7 +301,6 @@ namespace steem { namespace chain {
       >,
       allocator< limit_order_object >
    > limit_order_index;
-#endif // CK01
 
    struct by_owner;
    struct by_conversion_date;
@@ -341,6 +342,7 @@ namespace steem { namespace chain {
       >,
       allocator< liquidity_reward_balance_object >
    > liquidity_reward_balance_index;
+#endif // CK01
 
    typedef multi_index_container<
       feed_history_object,
@@ -475,6 +477,7 @@ FC_REFLECT( steem::chain::feed_history_object,
              (id)(current_median_history)(price_history) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::feed_history_object, steem::chain::feed_history_index )
 
+#ifdef CK01
 FC_REFLECT( steem::chain::convert_request_object,
              (id)(owner)(requestid)(amount)(conversion_date) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::convert_request_object, steem::chain::convert_request_index )
@@ -483,7 +486,6 @@ FC_REFLECT( steem::chain::liquidity_reward_balance_object,
              (id)(owner)(steem_volume)(sbd_volume)(weight)(last_update) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::liquidity_reward_balance_object, steem::chain::liquidity_reward_balance_index )
 
-#ifdef CK01
 FC_REFLECT( steem::chain::withdraw_vesting_route_object,
              (id)(from_account)(to_account)(percent)(auto_vest) )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::withdraw_vesting_route_object, steem::chain::withdraw_vesting_route_index )
