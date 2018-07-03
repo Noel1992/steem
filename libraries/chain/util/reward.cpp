@@ -1,4 +1,4 @@
-
+#ifdef CK01
 #include <steem/chain/util/reward.hpp>
 #include <steem/chain/util/uint256.hpp>
 
@@ -95,3 +95,4 @@ uint128_t evaluate_reward_curve( const uint128_t& rshares, const protocol::curve
 }
 
 } } } // steem::chain::util
+#endif // CK01

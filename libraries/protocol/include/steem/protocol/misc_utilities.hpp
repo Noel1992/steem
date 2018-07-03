@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef CK01
 namespace steem { namespace protocol {
 
 // TODO:  Rename these curves to match naming in manual.md
@@ -21,3 +21,4 @@ FC_REFLECT_ENUM(
    (linear)
    (square_root)
 )
+#endif // CK01

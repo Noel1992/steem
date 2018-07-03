@@ -5,6 +5,7 @@
 #define STEEM_HARDFORK_0_9_TIME 1468454400 // 2016-07-14T00:00:00 UTC
 #define STEEM_HARDFORK_0_9_VERSION hardfork_version( 0, 9 )
 
+#ifdef CK01
 namespace hardfork9
 {
 
@@ -186,4 +187,5 @@ inline static const std::set< std::string >& get_bad_memos()
 }
 
 }
+#endif // CK01
 #endif

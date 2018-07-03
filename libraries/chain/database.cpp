@@ -1573,7 +1573,6 @@ share_type database::pay_curators( const comment_object& c, share_type& max_rewa
       return unclaimed_rewards;
    } FC_CAPTURE_AND_RETHROW()
 }
-#endif // CK01
 
 void fill_comment_reward_context_local_state( util::comment_reward_context& ctx, const comment_object& comment )
 {
@@ -1582,7 +1581,6 @@ void fill_comment_reward_context_local_state( util::comment_reward_context& ctx,
    ctx.max_sbd = comment.max_accepted_payout;
 }
 
-#ifdef CK01
 share_type database::cashout_comment_helper( util::comment_reward_context& ctx, const comment_object& comment )
 {
    try
@@ -4064,6 +4062,7 @@ void database::apply_hardfork( uint32_t hardfork )
          retally_witness_vote_counts(true);
          break;
       case STEEM_HARDFORK_0_9:
+#ifdef CK01
          {
             for( const std::string& acc : hardfork9::get_compromised_accounts() )
             {
@@ -4080,6 +4079,7 @@ void database::apply_hardfork( uint32_t hardfork )
                });
             }
          }
+#endif // CK01
          break;
       case STEEM_HARDFORK_0_10:
 #ifdef CK01

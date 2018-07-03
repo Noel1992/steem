@@ -1,5 +1,7 @@
 add_subdirectory( build_helpers )
+if ( CK01 )
 add_subdirectory( cli_wallet )
+endif ( CK01 )
 add_subdirectory( steemd )
 #add_subdirectory( delayed_node )
 add_subdirectory( js_operation_serializer )

@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef CK01
 #include <steem/chain/util/asset.hpp>
 #include <steem/chain/steem_objects.hpp>
 
@@ -58,3 +58,4 @@ FC_REFLECT( steem::chain::util::comment_reward_context,
    (reward_curve)
    (content_constant)
    )
+#endif // CK01

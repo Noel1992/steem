@@ -1,10 +1,10 @@
 #pragma once
 
+#ifdef STEEM_ENABLE_SMT
 #include <steem/protocol/base.hpp>
 #include <steem/protocol/asset.hpp>
 #include <steem/protocol/misc_utilities.hpp>
 
-#ifdef STEEM_ENABLE_SMT
 namespace steem { namespace protocol {
 
 /**

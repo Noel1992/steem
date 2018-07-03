@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef CK01
 #include <steem/protocol/types.hpp>
 
 #include <fc/uint128.hpp>
@@ -15,3 +15,4 @@ inline u256 to256( const fc::uint128& t )
 }
 
 } } }
+#endif // CK01

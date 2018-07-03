@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef CK01
 #include <steem/protocol/asset.hpp>
 
 namespace steem { namespace chain { namespace util {
@@ -24,3 +24,4 @@ inline asset to_steem( const price& p, const asset& sbd )
 }
 
 } } }
+#endif // CK01
